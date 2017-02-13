@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# bin/detect <build-dir>
+set -euo pipefail
 
-BP=$(dirname $(dirname $0))
+BP_DIR=$(dirname $(dirname $0))
+BUILD_DIR=$1
 
-if [ -f $1/Staticfile ]; then
-  echo "staticfile `cat $BP/VERSION`" && exit 0
+if [ -f $BUILD_DIR/Staticfile ]; then
+  echo "staticfile `cat $BP_DIR/VERSION`"
+  exit 0
 else
-  echo "no" && exit 1
+  exit 1
 fi
