@@ -103,18 +103,18 @@ func Compile(buildDir, cacheDir string, manifest bp.Manifest) error {
 func getAppRootDir(buildDir string, sf Staticfile) (string, error) {
 	var rootDirRelative string
 
-	if sf.RootDir == "" {
+	if sf.RootDir != "" {
 		rootDirRelative = sf.RootDir
 	} else {
 		rootDirRelative = "."
 	}
 
-	bp.Log.BeginStep("Root folder %s", rootDirRelative)
-
-	rootDirAbs, err := filepath.Abs(rootDirRelative)
+	rootDirAbs, err := filepath.Abs(filepath.Join(buildDir, rootDirRelative))
 	if err != nil {
 		return "", err
 	}
+
+	bp.Log.BeginStep("Root folder %s", rootDirAbs)
 
 	dirInfo, err := os.Stat(rootDirAbs)
 	if err != nil {
