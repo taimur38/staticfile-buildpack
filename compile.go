@@ -18,7 +18,7 @@ type Staticfile struct {
 	DirectoryIndex  string `yaml:"directory"`
 	SSI             string `yaml:"ssi"`
 	PushState       string `yaml:"pushstate"`
-	HSTS            string `yaml:"http_strict_transport_security"`
+	HSTS            bool   `yaml:"http_strict_transport_security"`
 }
 
 var skipCopyFile = map[string]bool{
@@ -212,8 +212,8 @@ func setupNginx(buildDir string, manifest bp.Manifest) error {
 	authFile := filepath.Join(buildDir, "Staticfile.auth")
 	_, err = os.Stat(authFile)
 	if err == nil {
-		bp.Log.BeginStep("Enabling hosting of dotfiles")
-		e := bp.CopyFile(authFile, filepath.Join("nginx", "conf", ".htpasswd"))
+		bp.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
+		e := bp.CopyFile(authFile, filepath.Join(buildDir, "nginx", "conf", ".htpasswd"))
 		if e != nil {
 			return e
 		}
@@ -266,7 +266,7 @@ func applyStaticfileConfig(buildDir string, sf Staticfile) error {
 		}
 	}
 
-	if sf.HSTS == "enabled" {
+	if sf.HSTS {
 		bp.Log.BeginStep("Enabling HSTS")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_hsts"), []byte("x"), 0755)
 		if err != nil {

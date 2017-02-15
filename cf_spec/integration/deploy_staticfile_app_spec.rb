@@ -51,7 +51,7 @@ describe 'deploy a staticfile app' do
 
   context 'with a cached buildpack', :cached do
     it 'logs the files it downloads' do
-      expect(app).to have_logged(/Downloaded \[file:\/\/.*\]/)
+      expect(app).to have_logged(/Copy \[\/.*\]/)
     end
 
     it 'does not call out over the internet' do
