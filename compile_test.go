@@ -1,4 +1,4 @@
-package staticfile_test
+package main_test
 
 import (
 	main "github.com/cloudfoundry/staticfile_buildpack"
@@ -6,10 +6,10 @@ import (
 	"io/ioutil"
 	"os"
 
+	"errors"
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/golang/mock/gomock"
-	"errors"
 )
 
 //go:generate mockgen -package mocks -destination mocks/libbuildpack.go github.com/cloudfoundry/libbuildpack Manifest,Logger

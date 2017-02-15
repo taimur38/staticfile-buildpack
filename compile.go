@@ -1,4 +1,4 @@
-package staticfile
+package main
 
 import (
 	"fmt"

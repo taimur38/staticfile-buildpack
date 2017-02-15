@@ -5,5 +5,5 @@ BINDIR=$ROOTDIR/bin
 
 set -ex
 
-GOOS=linux go build -o $BINDIR/compile github.com/cloudfoundry/staticfile_builpack
+GOOS=linux go build -o $BINDIR/compile github.com/cloudfoundry/staticfile_buildpack
 
