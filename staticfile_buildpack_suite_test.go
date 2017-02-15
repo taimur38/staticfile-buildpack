@@ -1,4 +1,4 @@
-package staticfile_buildpack_test
+package staticfile_test
 
 import (
 	. "github.com/onsi/ginkgo"
