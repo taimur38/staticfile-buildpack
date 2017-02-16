@@ -30,9 +30,20 @@ var skipCopyFile = map[string]bool{
 }
 
 func main() {
+	var err error
+
 	buildDir := os.Args[1]
 	cacheDir := os.Args[2]
-	bpDir, err := filepath.Abs(filepath.Join(filepath.Dir(os.Args[0]), ".."))
+
+	bpDir := os.Getenv("BUILDPACK_DIR")
+
+	if bpDir == "" {
+		bpDir, err = filepath.Abs(filepath.Join(filepath.Dir(os.Args[0]), ".."))
+
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	manifest, err := bp.NewManifest(bpDir)
 	if err != nil {

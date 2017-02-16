@@ -10,5 +10,5 @@ fi
 
 set -ex
 
-GOOS=linux go build -o $BINDIR/compile github.com/cloudfoundry/staticfile_buildpack
+GOPATH=$ROOTDIR GOOS=linux go build -o $BINDIR/compile compile
 
