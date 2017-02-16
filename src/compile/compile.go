@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"io/ioutil"
 
 	bp "github.com/cloudfoundry/libbuildpack"
 )
@@ -27,6 +26,13 @@ var skipCopyFile = map[string]bool{
 	"manifest.yml":    true,
 	".profile":        true,
 	"stackato.yml":    true,
+}
+
+type Compiler struct {
+	BuildDir string
+	CacheDir string
+	Manifest bp.Manifest
+	Log      bp.Logger
 }
 
 func main() {
@@ -50,68 +56,73 @@ func main() {
 		panic(err)
 	}
 
-	err = Compile(buildDir, cacheDir, manifest)
+	c := &Compiler{BuildDir: buildDir,
+		CacheDir: cacheDir,
+		Manifest: manifest,
+		Log:      bp.NewLogger()}
+
+	err = c.Compile()
 	if err != nil {
 		panic(err)
 	}
 }
 
-func Compile(buildDir, cacheDir string, manifest bp.Manifest) error {
-	version, err := manifest.Version()
+func (c *Compiler) Compile() error {
+	version, err := c.Manifest.Version()
 	if err != nil {
-		bp.Log.Error("Could not determine buildpack version: %s", err.Error())
+		c.Log.Error("Could not determine buildpack version: %s", err.Error())
 		return err
 	}
 
-	bp.Log.BeginStep("Staticfile Buildpack version %s", version)
+	c.Log.BeginStep("Staticfile Buildpack version %s", version)
 
-	err = manifest.CheckStackSupport()
+	err = c.Manifest.CheckStackSupport()
 	if err != nil {
-		bp.Log.Error("Stack not supported by buildpack: %s", err.Error())
+		c.Log.Error("Stack not supported by buildpack: %s", err.Error())
 		return err
 	}
 
-	manifest.CheckBuildpackVersion(cacheDir)
+	c.Manifest.CheckBuildpackVersion(c.CacheDir)
 
 	var sf Staticfile
-	bp.LoadYAML(filepath.Join(buildDir, "Staticfile"), &sf)
+	bp.LoadYAML(filepath.Join(c.BuildDir, "Staticfile"), &sf)
 
-	appRootDir, err := getAppRootDir(buildDir, sf)
+	appRootDir, err := c.GetAppRootDir(sf)
 	if err != nil {
-		bp.Log.Error("Invalid root directory: %s", err.Error())
+		c.Log.Error("Invalid root directory: %s", err.Error())
 		return err
 	}
 
-	err = copyFilesToPublic(buildDir, appRootDir, sf)
+	err = c.copyFilesToPublic(appRootDir, sf)
 	if err != nil {
-		bp.Log.Error("Failed copying project files: %s", err.Error())
+		c.Log.Error("Failed copying project files: %s", err.Error())
 		return err
 	}
 
-	err = setupNginx(buildDir, manifest)
+	err = c.setupNginx()
 	if err != nil {
-		bp.Log.Error("Unable to install nginx: %s", err.Error())
+		c.Log.Error("Unable to install nginx: %s", err.Error())
 		return err
 	}
 
-	err = applyStaticfileConfig(buildDir, sf)
+	err = c.applyStaticfileConfig(sf)
 	if err != nil {
-		bp.Log.Error("Couldn't use config from Staticfile: %s", err.Error())
+		c.Log.Error("Couldn't use config from Staticfile: %s", err.Error())
 		return err
 	}
 
-	err = bp.CopyFile(filepath.Join(manifest.RootDir(), "bin", "boot.sh"), filepath.Join(buildDir, "boot.sh"))
+	err = bp.CopyFile(filepath.Join(c.Manifest.RootDir(), "bin", "boot.sh"), filepath.Join(c.BuildDir, "boot.sh"))
 	if err != nil {
-		bp.Log.Error("Couldn't copy boot.sh: %s", err.Error())
+		c.Log.Error("Couldn't copy boot.sh: %s", err.Error())
 		return err
 	}
 
-	manifest.StoreBuildpackMetadata(cacheDir)
+	c.Manifest.StoreBuildpackMetadata(c.CacheDir)
 
 	return nil
 }
 
-func getAppRootDir(buildDir string, sf Staticfile) (string, error) {
+func (c *Compiler) GetAppRootDir(sf Staticfile) (string, error) {
 	var rootDirRelative string
 
 	if sf.RootDir != "" {
@@ -120,12 +131,12 @@ func getAppRootDir(buildDir string, sf Staticfile) (string, error) {
 		rootDirRelative = "."
 	}
 
-	rootDirAbs, err := filepath.Abs(filepath.Join(buildDir, rootDirRelative))
+	rootDirAbs, err := filepath.Abs(filepath.Join(c.BuildDir, rootDirRelative))
 	if err != nil {
 		return "", err
 	}
 
-	bp.Log.BeginStep("Root folder %s", rootDirAbs)
+	c.Log.BeginStep("Root folder %s", rootDirAbs)
 
 	dirInfo, err := os.Stat(rootDirAbs)
 	if err != nil {
@@ -139,10 +150,10 @@ func getAppRootDir(buildDir string, sf Staticfile) (string, error) {
 	return rootDirAbs, nil
 }
 
-func copyFilesToPublic(buildDir string, appRootDir string, sf Staticfile) error {
-	bp.Log.BeginStep("Copying project files into public")
+func (c *Compiler) copyFilesToPublic(appRootDir string, sf Staticfile) error {
+	c.Log.BeginStep("Copying project files into public")
 
-	publicDir := filepath.Join(buildDir, "public")
+	publicDir := filepath.Join(c.BuildDir, "public")
 
 	if publicDir == appRootDir {
 		return nil
@@ -181,21 +192,21 @@ func copyFilesToPublic(buildDir string, appRootDir string, sf Staticfile) error 
 	return nil
 }
 
-func setupNginx(buildDir string, manifest bp.Manifest) error {
-	bp.Log.BeginStep("Setting up nginx")
+func (c *Compiler) setupNginx() error {
+	c.Log.BeginStep("Setting up nginx")
 
-	nginx, err := manifest.DefaultVersion("nginx")
+	nginx, err := c.Manifest.DefaultVersion("nginx")
 	if err != nil {
 		return err
 	}
-	bp.Log.Info("Using Nginx version %s", nginx.Version)
+	c.Log.Info("Using Nginx version %s", nginx.Version)
 
-	err = manifest.FetchDependency(nginx, "/tmp/nginx.tgz")
+	err = c.Manifest.FetchDependency(nginx, "/tmp/nginx.tgz")
 	if err != nil {
 		return err
 	}
 
-	err = bp.ExtractTarGz("/tmp/nginx.tgz", buildDir)
+	err = bp.ExtractTarGz("/tmp/nginx.tgz", c.BuildDir)
 	if err != nil {
 		return err
 	}
@@ -204,14 +215,14 @@ func setupNginx(buildDir string, manifest bp.Manifest) error {
 
 	for _, file := range confFiles {
 		var source string
-		confDest := filepath.Join(buildDir, "nginx", "conf", file)
-		customConfFile := filepath.Join(buildDir, "public", file)
+		confDest := filepath.Join(c.BuildDir, "nginx", "conf", file)
+		customConfFile := filepath.Join(c.BuildDir, "public", file)
 
 		_, err = os.Stat(customConfFile)
 		if err == nil {
 			source = customConfFile
 		} else {
-			source = filepath.Join(manifest.RootDir(), "conf", file)
+			source = filepath.Join(c.Manifest.RootDir(), "conf", file)
 		}
 
 		err = bp.CopyFile(source, confDest)
@@ -220,26 +231,26 @@ func setupNginx(buildDir string, manifest bp.Manifest) error {
 		}
 	}
 
-	authFile := filepath.Join(buildDir, "Staticfile.auth")
+	authFile := filepath.Join(c.BuildDir, "Staticfile.auth")
 	_, err = os.Stat(authFile)
 	if err == nil {
-		bp.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
-		e := bp.CopyFile(authFile, filepath.Join(buildDir, "nginx", "conf", ".htpasswd"))
+		c.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
+		e := bp.CopyFile(authFile, filepath.Join(c.BuildDir, "nginx", "conf", ".htpasswd"))
 		if e != nil {
 			return e
 		}
-		bp.Log.Protip("Learn about basic authentication", "http://docs.cloudfoundry.org/buildpacks/staticfile/index.html#authentication")
+		c.Log.Protip("Learn about basic authentication", "http://docs.cloudfoundry.org/buildpacks/staticfile/index.html#authentication")
 	}
 
 	return nil
 }
 
-func applyStaticfileConfig(buildDir string, sf Staticfile) error {
+func (c *Compiler) applyStaticfileConfig(sf Staticfile) error {
 	var err error
-	nginxConfDir := filepath.Join(buildDir, "nginx", "conf")
+	nginxConfDir := filepath.Join(c.BuildDir, "nginx", "conf")
 
 	if sf.HostDotFiles {
-		bp.Log.BeginStep("Enabling hosting of dotfiles")
+		c.Log.BeginStep("Enabling hosting of dotfiles")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_dotfiles"), []byte("x"), 0755)
 		if err != nil {
 			return err
@@ -254,7 +265,7 @@ func applyStaticfileConfig(buildDir string, sf Staticfile) error {
 	}
 
 	if sf.DirectoryIndex != "" {
-		bp.Log.BeginStep("Enabling directory index for folders without index.html files")
+		c.Log.BeginStep("Enabling directory index for folders without index.html files")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_directory_index"), []byte("x"), 0755)
 		if err != nil {
 			return err
@@ -262,7 +273,7 @@ func applyStaticfileConfig(buildDir string, sf Staticfile) error {
 	}
 
 	if sf.SSI == "enabled" {
-		bp.Log.BeginStep("Enabling SSI")
+		c.Log.BeginStep("Enabling SSI")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_ssi"), []byte("x"), 0755)
 		if err != nil {
 			return err
@@ -270,7 +281,7 @@ func applyStaticfileConfig(buildDir string, sf Staticfile) error {
 	}
 
 	if sf.PushState == "enabled" {
-		bp.Log.BeginStep("Enabling pushstate")
+		c.Log.BeginStep("Enabling pushstate")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_pushstate"), []byte("x"), 0755)
 		if err != nil {
 			return err
@@ -278,7 +289,7 @@ func applyStaticfileConfig(buildDir string, sf Staticfile) error {
 	}
 
 	if sf.HSTS {
-		bp.Log.BeginStep("Enabling HSTS")
+		c.Log.BeginStep("Enabling HSTS")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_hsts"), []byte("x"), 0755)
 		if err != nil {
 			return err

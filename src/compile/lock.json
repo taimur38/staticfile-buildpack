@@ -4,7 +4,7 @@
         {
             "name": "github.com/cloudfoundry/libbuildpack",
             "branch": "master",
-            "revision": "b2cf42cda36caa4a9a92f1b230cf0d693fd92b1d",
+            "revision": "45c39fc609aa6063327bdd72b44c85e31e15da22",
             "packages": [
                 "."
             ]
