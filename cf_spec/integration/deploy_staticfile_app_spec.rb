@@ -61,7 +61,7 @@ describe 'deploy a staticfile app' do
 
   context 'with a uncached buildpack', :uncached do
     it 'logs the files it downloads' do
-      expect(app).to have_logged(/Downloaded \[https:\/\/.*\]/)
+      expect(app).to have_logged(/Download \[https:\/\/.*\]/)
     end
 
     it "uses a proxy during staging if present" do
