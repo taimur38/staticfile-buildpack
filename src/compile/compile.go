@@ -106,7 +106,7 @@ func Compile(buildDir, cacheDir string, manifest bp.Manifest) error {
 		return err
 	}
 
-	//manifest.StoreBuildpackMetadata(cacheDir)
+	manifest.StoreBuildpackMetadata(cacheDir)
 
 	return nil
 }
