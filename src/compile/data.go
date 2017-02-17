@@ -18,8 +18,8 @@ var InitScript = `
 export APP_ROOT=$HOME
 export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 
-mv $APP_ROOT/nginx/conf/nginx.conf $APP_ROOT/nginx/conf/orig.conf
-erb $APP_ROOT/nginx/conf/orig.conf > $APP_ROOT/nginx/conf/nginx.conf
+sed -ie "s/##APP_ROOT##/$APP_ROOT/g" $APP_ROOT/nginx/conf/nginx.conf
+sed -ie "s/##PORT##/$PORT/g" $APP_ROOT/nginx/conf/nginx.conf
 
 if [[ ! -f $APP_ROOT/nginx/logs/access.log ]]; then
     mkfifo $APP_ROOT/nginx/logs/access.log
@@ -104,7 +104,7 @@ http {
         add_header Strict-Transport-Security "max-age=31536000";
       {{end}}      
       
-      {{if .LocationInclude ne ""}}
+      {{if ne .LocationInclude ""}}
         include {{.LocationInclude}};
       {{end}}
     }
