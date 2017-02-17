@@ -74,22 +74,32 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 		case "root":
 			conf.RootDir = value
 		case "host_dot_files":
-			sc.Compiler.Log.BeginStep("Enabling hosting of dotfiles")
-			conf.HostDotFiles = (value == "true")
+			if value == "true" {
+				sc.Compiler.Log.BeginStep("Enabling hosting of dotfiles")
+				conf.HostDotFiles = true
+			}
 		case "location_include":
 			conf.LocationInclude = value
 		case "directory":
-			sc.Compiler.Log.BeginStep("Enabling directory index for folders without index.html files")
-			conf.DirectoryIndex = (value != "")
+			if value != "" {
+				sc.Compiler.Log.BeginStep("Enabling directory index for folders without index.html files")
+				conf.DirectoryIndex = true
+			}
 		case "ssi":
-			sc.Compiler.Log.BeginStep("Enabling SSI")
-			conf.SSI = (value == "enabled")
+			if value == "enabled" {
+				sc.Compiler.Log.BeginStep("Enabling SSI")
+				conf.SSI = true
+			}
 		case "pushstate":
-			sc.Compiler.Log.BeginStep("Enabling pushstate")
-			conf.PushState = (value == "enabled")
+			if value == "enabled" {
+				sc.Compiler.Log.BeginStep("Enabling pushstate")
+				conf.PushState = true
+			}
 		case "http_strict_transport_security":
-			sc.Compiler.Log.BeginStep("Enabling HSTS")
-			conf.HSTS = (value == "true")
+			if value == "true" {
+				sc.Compiler.Log.BeginStep("Enabling HSTS")
+				conf.HSTS = (value == "true")
+			}
 		case "force_https":
 			conf.ForceHTTPS = (value == "true")
 		}

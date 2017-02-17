@@ -19,7 +19,7 @@ export APP_ROOT=$HOME
 export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 
 if [ -z ${FORCE_HTTPS-} ]; then
-  force_https_conf = ""
+  force_https_conf=""
 else
   force_https_conf="
         if (\$http_x_forwarded_proto != \"https\") {
