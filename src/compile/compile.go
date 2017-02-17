@@ -48,8 +48,10 @@ func main() {
 	c.StagingComplete()
 }
 
-func (c *StaticfileCompiler) Compile() error {
+func (c StaticfileCompiler) Compile() error {
+	var err error
 	var sf Staticfile
+
 	err = bp.LoadYAML(filepath.Join(c.BuildDir, "Staticfile"), &sf)
 	if err != nil {
 		c.Log.Error("Unable to: %s", err.Error())
@@ -76,13 +78,13 @@ func (c *StaticfileCompiler) Compile() error {
 
 	err = c.applyStaticfileConfig(sf)
 	if err != nil {
-		c.Log.Error("Couldn't use config from Staticfile: %s", err.Error())
+		c.Log.Error("Could not use config from Staticfile: %s", err.Error())
 		return err
 	}
 
-	err = bp.CopyFile(filepath.Join(c.Manifest.RootDir(), "bin", "boot.sh"), filepath.Join(c.BuildDir, "boot.sh"))
+	err = c.WriteProfileD()
 	if err != nil {
-		c.Log.Error("Couldn't copy boot.sh: %s", err.Error())
+		c.Log.Error("Could not write .profile.d script: %s", err.Error())
 		return err
 	}
 
@@ -218,14 +220,14 @@ func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
 
 	if sf.HostDotFiles {
 		c.Log.BeginStep("Enabling hosting of dotfiles")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_dotfiles"), []byte("x"), 0755)
+		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_dotfiles"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
 	}
 
 	if sf.LocationInclude != "" {
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_location_include"), []byte(sf.LocationInclude), 0755)
+		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_location_include"), []byte(sf.LocationInclude), 0666)
 		if err != nil {
 			return err
 		}
@@ -233,7 +235,7 @@ func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
 
 	if sf.DirectoryIndex != "" {
 		c.Log.BeginStep("Enabling directory index for folders without index.html files")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_directory_index"), []byte("x"), 0755)
+		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_directory_index"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
@@ -241,7 +243,7 @@ func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
 
 	if sf.SSI == "enabled" {
 		c.Log.BeginStep("Enabling SSI")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_ssi"), []byte("x"), 0755)
+		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_ssi"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
@@ -249,7 +251,7 @@ func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
 
 	if sf.PushState == "enabled" {
 		c.Log.BeginStep("Enabling pushstate")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_pushstate"), []byte("x"), 0755)
+		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_pushstate"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
@@ -257,10 +259,26 @@ func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
 
 	if sf.HSTS {
 		c.Log.BeginStep("Enabling HSTS")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_hsts"), []byte("x"), 0755)
+		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_hsts"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (c *StaticfileCompiler) WriteProfileD() error {
+	err := os.MkdirAll(filepath.Join(c.BuildDir, ".profile.d"), 0755)
+	if err != nil {
+		return err
+	}
+
+	script := filepath.Join(c.BuildDir, ".profile.d", "staticfile.sh")
+
+	err = ioutil.WriteFile(script, []byte(InitScript), 0755)
+	if err != nil {
+		return err
 	}
 
 	return nil

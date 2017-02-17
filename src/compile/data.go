@@ -1,3 +1,6 @@
+package main
+
+var InitScript = `
 # ------------------------------------------------------------------------------------------------
 # Copyright 2013 Jordon Bedwell.
 # Apache License.
@@ -15,23 +18,17 @@
 export APP_ROOT=$HOME
 export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 
-conf_file=$APP_ROOT/nginx/conf/nginx.conf
-if [ -f $APP_ROOT/public/nginx.conf ]
-then
-  conf_file=$APP_ROOT/public/nginx.conf
-fi
-
-mv $conf_file $APP_ROOT/nginx/conf/orig.conf
+mv $APP_ROOT/nginx/conf/nginx.conf $APP_ROOT/nginx/conf/orig.conf
 erb $APP_ROOT/nginx/conf/orig.conf > $APP_ROOT/nginx/conf/nginx.conf
 
-# ------------------------------------------------------------------------------------------------
+if [[ ! -f $APP_ROOT/nginx/logs/access.log ]]; then
+    mkfifo $APP_ROOT/nginx/logs/access.log
+fi
 
-mkfifo $APP_ROOT/nginx/logs/access.log
-mkfifo $APP_ROOT/nginx/logs/error.log
+if [[ ! -f $APP_ROOT/nginx/logs/error.log ]]; then
+    mkfifo $APP_ROOT/nginx/logs/error.log
+fi
 
 cat < $APP_ROOT/nginx/logs/access.log &
 (>&2 cat) < $APP_ROOT/nginx/logs/error.log &
-
-exec $APP_ROOT/nginx/sbin/nginx -p $APP_ROOT/nginx -c $APP_ROOT/nginx/conf/nginx.conf
-
-# ------------------------------------------------------------------------------------------------
+`

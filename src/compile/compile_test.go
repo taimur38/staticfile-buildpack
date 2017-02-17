@@ -21,7 +21,7 @@ var _ = Describe("Compile", func() {
 		buildDir string
 		cacheDir string
 		manifest bp.Manifest
-		compiler *c.Compiler
+		compiler *c.StaticfileCompiler
 		logger   bp.Logger
 	)
 
@@ -40,7 +40,7 @@ var _ = Describe("Compile", func() {
 	})
 
 	JustBeforeEach(func() {
-		compiler = &c.Compiler{BuildDir: buildDir,
+		compiler = &c.StaticfileCompiler{BuildDir: buildDir,
 			CacheDir: cacheDir,
 			Manifest: nil,
 			Log:      logger}
@@ -145,6 +145,49 @@ var _ = Describe("Compile", func() {
 				returnDir, err = compiler.GetAppRootDir(sf)
 				Expect(err).To(BeNil())
 				Expect(returnDir).To(Equal(buildDir))
+			})
+		})
+	})
+
+	Describe("WriteProfileD", func() {
+		var (
+			info           os.FileInfo
+			profileDScript string
+		)
+		BeforeEach(func() {
+			profileDScript = filepath.Join(buildDir, ".profile.d", "staticfile.sh")
+		})
+
+		Context(".profile.d directory exists", func() {
+			BeforeEach(func() {
+				err = os.Mkdir(filepath.Join(buildDir, ".profile.d"), 0777)
+				Expect(err).To(BeNil())
+			})
+
+			It("creates the file as an executable", func() {
+				err = compiler.WriteProfileD()
+				Expect(err).To(BeNil())
+				Expect(profileDScript).To(BeAnExistingFile())
+
+				info, err = os.Stat(profileDScript)
+				Expect(err).To(BeNil())
+
+				// make sure at least 1 executable bit is set
+				Expect(info.Mode().Perm() & 0111).NotTo(Equal(os.FileMode(0000)))
+			})
+
+		})
+		Context(".profile.d directory does not exist", func() {
+			It("creates the file as an executable", func() {
+				err = compiler.WriteProfileD()
+				Expect(err).To(BeNil())
+				Expect(profileDScript).To(BeAnExistingFile())
+
+				info, err = os.Stat(profileDScript)
+				Expect(err).To(BeNil())
+
+				// make sure at least 1 executable bit is set
+				Expect(info.Mode().Perm() & 0111).NotTo(Equal(0000))
 			})
 		})
 	})
