@@ -72,7 +72,6 @@ func (sc *StaticfileCompiler) Compile() error {
 	if err != nil {
 		sc.Compiler.Log.Error("Unable to load Staticfile: %s", err.Error())
 		return err
-
 	}
 
 	appRootDir, err := sc.GetAppRootDir()
@@ -81,21 +80,30 @@ func (sc *StaticfileCompiler) Compile() error {
 		return err
 	}
 
-	err = sc.copyFilesToPublic(appRootDir)
+	err = sc.CopyFilesToPublic(appRootDir)
 	if err != nil {
 		sc.Compiler.Log.Error("Failed copying project files: %s", err.Error())
 		return err
 	}
 
-	err = sc.setupNginx()
+	err = sc.InstallNginx()
 	if err != nil {
 		sc.Compiler.Log.Error("Unable to install nginx: %s", err.Error())
+		return err
+	}
+	//nginxConf,err := sc.GenerateNginxConf()
+
+	//err = sc.ConfigureNginx(nginxConf)
+
+	err = sc.ConfigureNginx()
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to configure nginx: %s", err.Error())
 		return err
 	}
 
 	err = sc.applyStaticfileConfig()
 	if err != nil {
-		sc.Compiler.Log.Error("Could not use config from Staticfile: %s", err.Error())
+		sc.Compiler.Log.Error("Unable to apply Staticfile config: %s", err.Error())
 		return err
 	}
 
@@ -136,7 +144,7 @@ func (sc *StaticfileCompiler) GetAppRootDir() (string, error) {
 	return rootDirAbs, nil
 }
 
-func (sc *StaticfileCompiler) copyFilesToPublic(appRootDir string) error {
+func (sc *StaticfileCompiler) CopyFilesToPublic(appRootDir string) error {
 	sc.Compiler.Log.BeginStep("Copying project files into public")
 
 	publicDir := filepath.Join(sc.Compiler.BuildDir, "public")
@@ -178,8 +186,8 @@ func (sc *StaticfileCompiler) copyFilesToPublic(appRootDir string) error {
 	return nil
 }
 
-func (sc *StaticfileCompiler) setupNginx() error {
-	sc.Compiler.Log.BeginStep("Setting up nginx")
+func (sc *StaticfileCompiler) InstallNginx() error {
+	sc.Compiler.Log.BeginStep("Installing nginx")
 
 	nginx, err := sc.Compiler.Manifest.DefaultVersion("nginx")
 	if err != nil {
@@ -197,21 +205,29 @@ func (sc *StaticfileCompiler) setupNginx() error {
 		return err
 	}
 
-	confFiles := []string{"nginx.conf", "mime.types"}
+	return nil
+}
 
-	for _, file := range confFiles {
-		var source string
+func (sc *StaticfileCompiler) ConfigureNginx() error {
+	var err error
+
+	sc.Compiler.Log.BeginStep("Configuring nginx")
+
+	confFiles := map[string]string{
+		"nginx.conf": NginxConfTemplate,
+		"mime.types": MimeTypes}
+
+	for file, contents := range confFiles {
 		confDest := filepath.Join(sc.Compiler.BuildDir, "nginx", "conf", file)
 		customConfFile := filepath.Join(sc.Compiler.BuildDir, "public", file)
 
 		_, err = os.Stat(customConfFile)
 		if err == nil {
-			source = customConfFile
+			err = bp.CopyFile(customConfFile, confDest)
 		} else {
-			source = filepath.Join(sc.Compiler.Manifest.RootDir(), "conf", file)
+			err = ioutil.WriteFile(confDest, []byte(contents), 0666)
 		}
 
-		err = bp.CopyFile(source, confDest)
 		if err != nil {
 			return err
 		}
