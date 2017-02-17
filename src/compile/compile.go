@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"bytes"
 
 	bp "github.com/cloudfoundry/libbuildpack"
 )
@@ -14,10 +17,12 @@ type Staticfile struct {
 	RootDir         string `yaml:"root"`
 	HostDotFiles    bool   `yaml:"host_dot_files"`
 	LocationInclude string `yaml:"location_include"`
-	DirectoryIndex  string `yaml:"directory"`
-	SSI             string `yaml:"ssi"`
-	PushState       string `yaml:"pushstate"`
+	DirectoryIndex  bool   `yaml:"directory"`
+	SSI             bool   `yaml:"ssi"`
+	PushState       bool   `yaml:"pushstate"`
 	HSTS            bool   `yaml:"http_strict_transport_security"`
+	ForceHTTPS      bool   `yaml:"force_https"`
+	BasicAuth       bool
 }
 
 type StaticfileCompiler struct {
@@ -53,13 +58,49 @@ func main() {
 }
 
 func (sc *StaticfileCompiler) LoadStaticfile() error {
-	err := bp.LoadYAML(filepath.Join(sc.Compiler.BuildDir, "Staticfile"), &sc.Config)
+	var hash map[string]string
+	conf := &sc.Config
+
+	err := bp.LoadYAML(filepath.Join(sc.Compiler.BuildDir, "Staticfile"), &hash)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-
 		return err
+	}
+
+	for key, value := range hash {
+		switch key {
+		case "root":
+			conf.RootDir = value
+		case "host_dot_files":
+			sc.Compiler.Log.BeginStep("Enabling hosting of dotfiles")
+			conf.HostDotFiles = (value == "true")
+		case "location_include":
+			conf.LocationInclude = value
+		case "directory":
+			sc.Compiler.Log.BeginStep("Enabling directory index for folders without index.html files")
+			conf.DirectoryIndex = (value != "")
+		case "ssi":
+			sc.Compiler.Log.BeginStep("Enabling SSI")
+			conf.SSI = (value == "enabled")
+		case "pushstate":
+			sc.Compiler.Log.BeginStep("Enabling pushstate")
+			conf.PushState = (value == "enabled")
+		case "http_strict_transport_security":
+			sc.Compiler.Log.BeginStep("Enabling HSTS")
+			conf.HSTS = (value == "true")
+		case "force_https":
+			conf.ForceHTTPS = (value == "true")
+		}
+	}
+
+	authFile := filepath.Join(sc.Compiler.BuildDir, "Staticfile.auth")
+	_, err = os.Stat(authFile)
+	if err == nil {
+		conf.BasicAuth = true
+		sc.Compiler.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
+		sc.Compiler.Log.Protip("Learn about basic authentication", "http://docs.cloudfoundry.org/buildpacks/staticfile/index.html#authentication")
 	}
 
 	return nil
@@ -82,7 +123,7 @@ func (sc *StaticfileCompiler) Compile() error {
 
 	err = sc.CopyFilesToPublic(appRootDir)
 	if err != nil {
-		sc.Compiler.Log.Error("Failed copying project files: %s", err.Error())
+		sc.Compiler.Log.Error("Unable to copy project files: %s", err.Error())
 		return err
 	}
 
@@ -91,19 +132,16 @@ func (sc *StaticfileCompiler) Compile() error {
 		sc.Compiler.Log.Error("Unable to install nginx: %s", err.Error())
 		return err
 	}
-	//nginxConf,err := sc.GenerateNginxConf()
 
-	//err = sc.ConfigureNginx(nginxConf)
-
-	err = sc.ConfigureNginx()
+	nginxConf, err := sc.GenerateNginxConf()
 	if err != nil {
-		sc.Compiler.Log.Error("Unable to configure nginx: %s", err.Error())
+		sc.Compiler.Log.Error("Unable to generate nginx.conf: %s", err.Error())
 		return err
 	}
 
-	err = sc.applyStaticfileConfig()
+	err = sc.ConfigureNginx(nginxConf)
 	if err != nil {
-		sc.Compiler.Log.Error("Unable to apply Staticfile config: %s", err.Error())
+		sc.Compiler.Log.Error("Unable to configure nginx: %s", err.Error())
 		return err
 	}
 
@@ -114,6 +152,18 @@ func (sc *StaticfileCompiler) Compile() error {
 	}
 
 	return nil
+}
+
+func (sc *StaticfileCompiler) GenerateNginxConf() (string, error) {
+	buffer := new(bytes.Buffer)
+
+	t := template.Must(template.New("nginx.conf").Parse(NginxConfTemplate))
+
+	err := t.Execute(buffer, sc.Config)
+	if err != nil {
+		return "", err
+	}
+	return buffer.String(), nil
 }
 
 func (sc *StaticfileCompiler) GetAppRootDir() (string, error) {
@@ -208,13 +258,13 @@ func (sc *StaticfileCompiler) InstallNginx() error {
 	return nil
 }
 
-func (sc *StaticfileCompiler) ConfigureNginx() error {
+func (sc *StaticfileCompiler) ConfigureNginx(nginxConf string) error {
 	var err error
 
 	sc.Compiler.Log.BeginStep("Configuring nginx")
 
 	confFiles := map[string]string{
-		"nginx.conf": NginxConfTemplate,
+		"nginx.conf": nginxConf,
 		"mime.types": MimeTypes}
 
 	for file, contents := range confFiles {
@@ -233,66 +283,9 @@ func (sc *StaticfileCompiler) ConfigureNginx() error {
 		}
 	}
 
-	authFile := filepath.Join(sc.Compiler.BuildDir, "Staticfile.auth")
-	_, err = os.Stat(authFile)
-	if err == nil {
-		sc.Compiler.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
-		e := bp.CopyFile(authFile, filepath.Join(sc.Compiler.BuildDir, "nginx", "conf", ".htpasswd"))
-		if e != nil {
-			return e
-		}
-		sc.Compiler.Log.Protip("Learn about basic authentication", "http://docs.cloudfoundry.org/buildpacks/staticfile/index.html#authentication")
-	}
-
-	return nil
-}
-
-func (sc *StaticfileCompiler) applyStaticfileConfig() error {
-	var err error
-	nginxConfDir := filepath.Join(sc.Compiler.BuildDir, "nginx", "conf")
-
-	if sc.Config.HostDotFiles {
-		sc.Compiler.Log.BeginStep("Enabling hosting of dotfiles")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_dotfiles"), []byte("x"), 0666)
-		if err != nil {
-			return err
-		}
-	}
-
-	if sc.Config.LocationInclude != "" {
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_location_include"), []byte(sc.Config.LocationInclude), 0666)
-		if err != nil {
-			return err
-		}
-	}
-
-	if sc.Config.DirectoryIndex != "" {
-		sc.Compiler.Log.BeginStep("Enabling directory index for folders without index.html files")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_directory_index"), []byte("x"), 0666)
-		if err != nil {
-			return err
-		}
-	}
-
-	if sc.Config.SSI == "enabled" {
-		sc.Compiler.Log.BeginStep("Enabling SSI")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_ssi"), []byte("x"), 0666)
-		if err != nil {
-			return err
-		}
-	}
-
-	if sc.Config.PushState == "enabled" {
-		sc.Compiler.Log.BeginStep("Enabling pushstate")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_pushstate"), []byte("x"), 0666)
-		if err != nil {
-			return err
-		}
-	}
-
-	if sc.Config.HSTS {
-		sc.Compiler.Log.BeginStep("Enabling HSTS")
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_hsts"), []byte("x"), 0666)
+	if sc.Config.BasicAuth {
+		authFile := filepath.Join(sc.Compiler.BuildDir, "Staticfile.auth")
+		err = bp.CopyFile(authFile, filepath.Join(sc.Compiler.BuildDir, "nginx", "conf", ".htpasswd"))
 		if err != nil {
 			return err
 		}

@@ -37,13 +37,13 @@ var NginxConfTemplate = `
 worker_processes 1;
 daemon off;
 
-error_log <%= ENV["APP_ROOT"] %>/nginx/logs/error.log;
+error_log ##APP_ROOT##/nginx/logs/error.log;
 events { worker_connections 1024; }
 
 http {
   charset utf-8;
   log_format cloudfoundry '$http_x_forwarded_for - $http_referer - [$time_local] "$request" $status $body_bytes_sent';
-  access_log <%= ENV["APP_ROOT"] %>/nginx/logs/access.log cloudfoundry;
+  access_log ##APP_ROOT##/nginx/logs/access.log cloudfoundry;
   default_type application/octet-stream;
   include mime.types;
   sendfile on;
@@ -61,50 +61,60 @@ http {
 
   tcp_nopush on;
   keepalive_timeout 30;
-  port_in_redirect off; # Ensure that redirects don't include the internal container PORT - <%= ENV["PORT"] %>
+  port_in_redirect off; # Ensure that redirects don't include the internal container PORT - ##PORT##
   server_tokens off;
 
   server {
-    listen <%= ENV["PORT"] %>;
+    listen ##PORT##;
     server_name localhost;
 
     location / {
-      root <%= ENV["APP_ROOT"] %>/public;
-      <% if File.exists?(File.join(ENV["APP_ROOT"], "nginx/conf/.enable_pushstate")) %>
-      if (!-e $request_filename) {
-        rewrite ^(.*)$ / break;
-      }
-      <% end %>
+      root ##APP_ROOT##/public;
+      
+      {{if .PushState}}
+        if (!-e $request_filename) {
+          rewrite ^(.*)$ / break;
+        }
+      {{end}}
+      
       index index.html index.htm Default.htm;
-      <% if File.exists?(File.join(ENV["APP_ROOT"], "nginx/conf/.enable_directory_index")) %>
+      
+      {{if .DirectoryIndex}}
         autoindex on;
-      <% end %>
-      <% if File.exists?(auth_file = File.join(ENV["APP_ROOT"], "nginx/conf/.htpasswd")) %>
-        auth_basic "Restricted";                                #For Basic Auth
-        auth_basic_user_file <%= auth_file %>;  #For Basic Auth
-      <% end %>
-      <% if ENV["FORCE_HTTPS"] %>
-        if ($http_x_forwarded_proto != "https") {
+      {{end}}      
+      
+      {{if .BasicAuth}}
+        auth_basic "Restricted";  #For Basic Auth
+        auth_basic_user_file ##APP_ROOT##/nginx/conf/.htpasswd;
+      {{end}}
+
+      {{if .ForceHTTPS}}
+         if ($http_x_forwarded_proto != "https") {
           return 301 https://$host$request_uri;
         }
-      <% end %>
-      <% if File.exists?(File.join(ENV["APP_ROOT"], "nginx/conf/.enable_ssi")) %>
+      {{else}}
+        ##FORCE_HTTPS##
+      {{end}}
+
+      {{if .SSI}}
         ssi on;
-      <% end %>
-      <% if File.exists?(File.join(ENV["APP_ROOT"], "nginx/conf/.enable_hsts")) %>
+      {{end}}
+
+      {{if .HSTS}}
         add_header Strict-Transport-Security "max-age=31536000";
-      <% end %>
-      <% if File.exists?(File.join(ENV["APP_ROOT"], "nginx/conf/.enable_location_include")) %>
-        include <%= File.read(File.join(ENV["APP_ROOT"], "nginx/conf/.enable_location_include")).chomp %>;
-      <% end %>
+      {{end}}      
+      
+      {{if .LocationInclude ne ""}}
+        include {{.LocationInclude}};
+      {{end}}
     }
 
-  <% unless File.exists?(File.join(ENV["APP_ROOT"], "nginx/conf/.enable_dotfiles")) %>
+  {{if .HostDotFiles}}
     location ~ /\. {
       deny all;
       return 404;
     }
-  <% end %>
+  {{end}}
   }
 }
 `
