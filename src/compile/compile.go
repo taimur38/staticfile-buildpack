@@ -52,9 +52,13 @@ func main() {
 	compiler.StagingComplete()
 }
 
-func (sc *StaticfileCompiler) LoadStaticFile() error {
+func (sc *StaticfileCompiler) LoadStaticfile() error {
 	err := bp.LoadYAML(filepath.Join(sc.Compiler.BuildDir, "Staticfile"), &sc.Config)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+
 		return err
 	}
 
@@ -64,7 +68,7 @@ func (sc *StaticfileCompiler) LoadStaticFile() error {
 func (sc *StaticfileCompiler) Compile() error {
 	var err error
 
-	err = sc.LoadStaticFile()
+	err = sc.LoadStaticfile()
 	if err != nil {
 		sc.Compiler.Log.Error("Unable to load Staticfile: %s", err.Error())
 		return err

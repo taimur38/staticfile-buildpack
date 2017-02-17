@@ -48,31 +48,27 @@ var _ = Describe("Compile", func() {
 		compiler = &c.StaticfileCompiler{Compiler: bpc, Config: sf}
 	})
 
-	AfterEach(func() {
-		err = os.RemoveAll(buildDir)
-		Expect(err).To(BeNil())
-
-		err = os.RemoveAll(cacheDir)
-		Expect(err).To(BeNil())
-	})
-
-	Describe("LoadStaticFile", func() {
-		var (
-			buffer *bytes.Buffer
-		)
-		BeforeEach(func() {
-			buffer = new(bytes.Buffer)
-			logger = bp.NewLogger()
-			logger.SetOutput(buffer)
-		})
-
+	Describe("LoadStaticfile", func() {
 		Context("the staticfile does not exist", func() {
 			BeforeEach(func() {
 				buildDir = "fixtures/no_staticfile"
 			})
-			It("does not log anything", func() {
-				compiler.LoadStaticFile()
-				Expect(buffer.String()).To(Equal(""))
+			It("does not return an error", func() {
+				err = compiler.LoadStaticfile()
+				Expect(err).To(BeNil())
+			})
+
+			It("has default values", func() {
+				err = compiler.LoadStaticfile()
+				Expect(err).To(BeNil())
+				Expect(compiler.Config.RootDir).To(Equal(""))
+				Expect(compiler.Config.HostDotFiles).To(Equal(false))
+				Expect(compiler.Config.LocationInclude).To(Equal(""))
+				Expect(compiler.Config.DirectoryIndex).To(Equal(""))
+				Expect(compiler.Config.SSI).To(Equal(""))
+				Expect(compiler.Config.PushState).To(Equal(""))
+				Expect(compiler.Config.HSTS).To(Equal(false))
+
 			})
 		})
 		Context("the staticfile exists and is valid", func() {
@@ -81,7 +77,8 @@ var _ = Describe("Compile", func() {
 			})
 
 			It("loads the staticfile into the compiler struct", func() {
-				compiler.LoadStaticFile()
+				err = compiler.LoadStaticfile()
+				Expect(err).To(BeNil())
 				Expect(compiler.Config.RootDir).To(Equal("root_test"))
 				Expect(compiler.Config.HostDotFiles).To(Equal(true))
 				Expect(compiler.Config.LocationInclude).To(Equal("location_include_test"))
@@ -96,8 +93,9 @@ var _ = Describe("Compile", func() {
 				buildDir = "fixtures/invalid_staticfile"
 			})
 
-			It("logs an error", func() {
-
+			It("returns an error", func() {
+				err = compiler.LoadStaticfile()
+				Expect(err).NotTo(BeNil())
 			})
 		})
 	})
