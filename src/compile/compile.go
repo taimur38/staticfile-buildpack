@@ -20,6 +20,8 @@ type Staticfile struct {
 	HSTS            bool   `yaml:"http_strict_transport_security"`
 }
 
+type StaticfileCompiler bp.Compiler
+
 var skipCopyFile = map[string]bool{
 	"Staticfile":      true,
 	"Staticfile.auth": true,
@@ -28,64 +30,31 @@ var skipCopyFile = map[string]bool{
 	"stackato.yml":    true,
 }
 
-type Compiler struct {
-	BuildDir string
-	CacheDir string
-	Manifest bp.Manifest
-	Log      bp.Logger
-}
-
 func main() {
-	var err error
-
 	buildDir := os.Args[1]
 	cacheDir := os.Args[2]
 
-	bpDir := os.Getenv("BUILDPACK_DIR")
-
-	if bpDir == "" {
-		bpDir, err = filepath.Abs(filepath.Join(filepath.Dir(os.Args[0]), ".."))
-
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	manifest, err := bp.NewManifest(bpDir)
+	c, err := bp.NewCompiler(buildDir, cacheDir, bp.NewLogger())
+	err = c.CheckBuildpackValid()
 	if err != nil {
 		panic(err)
 	}
 
-	c := &Compiler{BuildDir: buildDir,
-		CacheDir: cacheDir,
-		Manifest: manifest,
-		Log:      bp.NewLogger()}
-
-	err = c.Compile()
+	err = StaticfileCompiler(c).Compile()
 	if err != nil {
 		panic(err)
 	}
+
+	c.StagingComplete()
 }
 
-func (c *Compiler) Compile() error {
-	version, err := c.Manifest.Version()
-	if err != nil {
-		c.Log.Error("Could not determine buildpack version: %s", err.Error())
-		return err
-	}
-
-	c.Log.BeginStep("Staticfile Buildpack version %s", version)
-
-	err = c.Manifest.CheckStackSupport()
-	if err != nil {
-		c.Log.Error("Stack not supported by buildpack: %s", err.Error())
-		return err
-	}
-
-	c.Manifest.CheckBuildpackVersion(c.CacheDir)
-
+func (c *StaticfileCompiler) Compile() error {
 	var sf Staticfile
-	bp.LoadYAML(filepath.Join(c.BuildDir, "Staticfile"), &sf)
+	err = bp.LoadYAML(filepath.Join(c.BuildDir, "Staticfile"), &sf)
+	if err != nil {
+		c.Log.Error("Unable to: %s", err.Error())
+		return err
+	}
 
 	appRootDir, err := c.GetAppRootDir(sf)
 	if err != nil {
@@ -117,12 +86,10 @@ func (c *Compiler) Compile() error {
 		return err
 	}
 
-	c.Manifest.StoreBuildpackMetadata(c.CacheDir)
-
 	return nil
 }
 
-func (c *Compiler) GetAppRootDir(sf Staticfile) (string, error) {
+func (c *StaticfileCompiler) GetAppRootDir(sf Staticfile) (string, error) {
 	var rootDirRelative string
 
 	if sf.RootDir != "" {
@@ -150,7 +117,7 @@ func (c *Compiler) GetAppRootDir(sf Staticfile) (string, error) {
 	return rootDirAbs, nil
 }
 
-func (c *Compiler) copyFilesToPublic(appRootDir string, sf Staticfile) error {
+func (c *StaticfileCompiler) copyFilesToPublic(appRootDir string, sf Staticfile) error {
 	c.Log.BeginStep("Copying project files into public")
 
 	publicDir := filepath.Join(c.BuildDir, "public")
@@ -192,7 +159,7 @@ func (c *Compiler) copyFilesToPublic(appRootDir string, sf Staticfile) error {
 	return nil
 }
 
-func (c *Compiler) setupNginx() error {
+func (c *StaticfileCompiler) setupNginx() error {
 	c.Log.BeginStep("Setting up nginx")
 
 	nginx, err := c.Manifest.DefaultVersion("nginx")
@@ -245,7 +212,7 @@ func (c *Compiler) setupNginx() error {
 	return nil
 }
 
-func (c *Compiler) applyStaticfileConfig(sf Staticfile) error {
+func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
 	var err error
 	nginxConfDir := filepath.Join(c.BuildDir, "nginx", "conf")
 

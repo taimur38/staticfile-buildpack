@@ -34,7 +34,7 @@ else
   exit 1
 fi
 
-unset GOOROT
+unset GOROOT
 unset GOPATH
 
 $output_dir/compile $BUILD_DIR $CACHE_DIR
