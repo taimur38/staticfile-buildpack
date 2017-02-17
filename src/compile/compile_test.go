@@ -32,7 +32,7 @@ var _ = Describe("Compile", func() {
 		cacheDir, err = ioutil.TempDir("", "cache")
 		Expect(err).To(BeNil())
 
-		manifest, err = bp.NewManifest("fixtures/standard")
+		manifest, err = bp.NewManifest("fixtures/standard_manifest")
 		Expect(err).To(BeNil())
 
 		logger = bp.NewLogger()
@@ -40,10 +40,12 @@ var _ = Describe("Compile", func() {
 	})
 
 	JustBeforeEach(func() {
-		compiler = &c.StaticfileCompiler{BuildDir: buildDir,
+
+		bpc := &bp.Compiler{BuildDir: buildDir,
 			CacheDir: cacheDir,
-			Manifest: nil,
+			Manifest: manifest,
 			Log:      logger}
+		compiler = &c.StaticfileCompiler{Compiler: bpc, Config: sf}
 	})
 
 	AfterEach(func() {
@@ -52,6 +54,52 @@ var _ = Describe("Compile", func() {
 
 		err = os.RemoveAll(cacheDir)
 		Expect(err).To(BeNil())
+	})
+
+	Describe("LoadStaticFile", func() {
+		var (
+			buffer *bytes.Buffer
+		)
+		BeforeEach(func() {
+			buffer = new(bytes.Buffer)
+			logger = bp.NewLogger()
+			logger.SetOutput(buffer)
+		})
+
+		Context("the staticfile does not exist", func() {
+			BeforeEach(func() {
+				buildDir = "fixtures/no_staticfile"
+			})
+			It("does not log anything", func() {
+				compiler.LoadStaticFile()
+				Expect(buffer.String()).To(Equal(""))
+			})
+		})
+		Context("the staticfile exists and is valid", func() {
+			BeforeEach(func() {
+				buildDir = "fixtures/valid_staticfile"
+			})
+
+			It("loads the staticfile into the compiler struct", func() {
+				compiler.LoadStaticFile()
+				Expect(compiler.Config.RootDir).To(Equal("root_test"))
+				Expect(compiler.Config.HostDotFiles).To(Equal(true))
+				Expect(compiler.Config.LocationInclude).To(Equal("location_include_test"))
+				Expect(compiler.Config.DirectoryIndex).To(Equal("directory_test"))
+				Expect(compiler.Config.SSI).To(Equal("ssi_test"))
+				Expect(compiler.Config.PushState).To(Equal("pushstate_test"))
+				Expect(compiler.Config.HSTS).To(Equal(true))
+			})
+		})
+		Context("the staticfile exists and is not valid", func() {
+			BeforeEach(func() {
+				buildDir = "fixtures/invalid_staticfile"
+			})
+
+			It("logs an error", func() {
+
+			})
+		})
 	})
 
 	Describe("GetAppRootDir", func() {
@@ -72,14 +120,14 @@ var _ = Describe("Compile", func() {
 				})
 
 				It("logs the staticfile's root directory", func() {
-					returnDir, err = compiler.GetAppRootDir(sf)
+					returnDir, err = compiler.GetAppRootDir()
 					Expect(buffer.String()).To(ContainSubstring("-----> Root folder"))
 					Expect(buffer.String()).To(ContainSubstring("not_exist"))
 
 				})
 
 				It("returns an error", func() {
-					returnDir, err = compiler.GetAppRootDir(sf)
+					returnDir, err = compiler.GetAppRootDir()
 					Expect(returnDir).To(Equal(""))
 					Expect(err).NotTo(BeNil())
 					Expect(err.Error()).To(ContainSubstring("the application Staticfile specifies a root directory"))
@@ -95,14 +143,14 @@ var _ = Describe("Compile", func() {
 				})
 
 				It("logs the staticfile's root directory", func() {
-					returnDir, err = compiler.GetAppRootDir(sf)
+					returnDir, err = compiler.GetAppRootDir()
 					Expect(buffer.String()).To(ContainSubstring("-----> Root folder"))
 					Expect(buffer.String()).To(ContainSubstring("actually_a_file"))
 
 				})
 
 				It("returns an error", func() {
-					returnDir, err = compiler.GetAppRootDir(sf)
+					returnDir, err = compiler.GetAppRootDir()
 					Expect(returnDir).To(Equal(""))
 					Expect(err).NotTo(BeNil())
 					Expect(err.Error()).To(ContainSubstring("the application Staticfile specifies a root directory"))
@@ -117,14 +165,14 @@ var _ = Describe("Compile", func() {
 				})
 
 				It("logs the staticfile's root directory", func() {
-					returnDir, err = compiler.GetAppRootDir(sf)
+					returnDir, err = compiler.GetAppRootDir()
 					Expect(buffer.String()).To(ContainSubstring("-----> Root folder"))
 					Expect(buffer.String()).To(ContainSubstring("a_directory"))
 
 				})
 
 				It("returns the full directory path", func() {
-					returnDir, err = compiler.GetAppRootDir(sf)
+					returnDir, err = compiler.GetAppRootDir()
 					Expect(err).To(BeNil())
 					Expect(returnDir).To(Equal(filepath.Join(buildDir, "a_directory")))
 				})
@@ -137,12 +185,12 @@ var _ = Describe("Compile", func() {
 			})
 
 			It("logs the build directory as the root directory", func() {
-				returnDir, err = compiler.GetAppRootDir(sf)
+				returnDir, err = compiler.GetAppRootDir()
 				Expect(buffer.String()).To(ContainSubstring("-----> Root folder"))
 				Expect(buffer.String()).To(ContainSubstring(buildDir))
 			})
 			It("returns the build directory", func() {
-				returnDir, err = compiler.GetAppRootDir(sf)
+				returnDir, err = compiler.GetAppRootDir()
 				Expect(err).To(BeNil())
 				Expect(returnDir).To(Equal(buildDir))
 			})

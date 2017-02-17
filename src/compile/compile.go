@@ -20,7 +20,10 @@ type Staticfile struct {
 	HSTS            bool   `yaml:"http_strict_transport_security"`
 }
 
-type StaticfileCompiler bp.Compiler
+type StaticfileCompiler struct {
+	Compiler *bp.Compiler
+	Config   Staticfile
+}
 
 var skipCopyFile = map[string]bool{
 	"Staticfile":      true,
@@ -34,78 +37,88 @@ func main() {
 	buildDir := os.Args[1]
 	cacheDir := os.Args[2]
 
-	c, err := bp.NewCompiler(buildDir, cacheDir, bp.NewLogger())
-	err = c.CheckBuildpackValid()
+	compiler, err := bp.NewCompiler(buildDir, cacheDir, bp.NewLogger())
+	err = compiler.CheckBuildpackValid()
 	if err != nil {
 		panic(err)
 	}
 
-	err = StaticfileCompiler(c).Compile()
+	sc := StaticfileCompiler{Compiler: compiler, Config: Staticfile{}}
+	err = sc.Compile()
 	if err != nil {
 		panic(err)
 	}
 
-	c.StagingComplete()
+	compiler.StagingComplete()
 }
 
-func (c StaticfileCompiler) Compile() error {
-	var err error
-	var sf Staticfile
-
-	err = bp.LoadYAML(filepath.Join(c.BuildDir, "Staticfile"), &sf)
+func (sc *StaticfileCompiler) LoadStaticFile() error {
+	err := bp.LoadYAML(filepath.Join(sc.Compiler.BuildDir, "Staticfile"), &sc.Config)
 	if err != nil {
-		c.Log.Error("Unable to: %s", err.Error())
-		return err
-	}
-
-	appRootDir, err := c.GetAppRootDir(sf)
-	if err != nil {
-		c.Log.Error("Invalid root directory: %s", err.Error())
-		return err
-	}
-
-	err = c.copyFilesToPublic(appRootDir, sf)
-	if err != nil {
-		c.Log.Error("Failed copying project files: %s", err.Error())
-		return err
-	}
-
-	err = c.setupNginx()
-	if err != nil {
-		c.Log.Error("Unable to install nginx: %s", err.Error())
-		return err
-	}
-
-	err = c.applyStaticfileConfig(sf)
-	if err != nil {
-		c.Log.Error("Could not use config from Staticfile: %s", err.Error())
-		return err
-	}
-
-	err = c.WriteProfileD()
-	if err != nil {
-		c.Log.Error("Could not write .profile.d script: %s", err.Error())
 		return err
 	}
 
 	return nil
 }
 
-func (c *StaticfileCompiler) GetAppRootDir(sf Staticfile) (string, error) {
+func (sc *StaticfileCompiler) Compile() error {
+	var err error
+
+	err = sc.LoadStaticFile()
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to load Staticfile: %s", err.Error())
+		return err
+
+	}
+
+	appRootDir, err := sc.GetAppRootDir()
+	if err != nil {
+		sc.Compiler.Log.Error("Invalid root directory: %s", err.Error())
+		return err
+	}
+
+	err = sc.copyFilesToPublic(appRootDir)
+	if err != nil {
+		sc.Compiler.Log.Error("Failed copying project files: %s", err.Error())
+		return err
+	}
+
+	err = sc.setupNginx()
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to install nginx: %s", err.Error())
+		return err
+	}
+
+	err = sc.applyStaticfileConfig()
+	if err != nil {
+		sc.Compiler.Log.Error("Could not use config from Staticfile: %s", err.Error())
+		return err
+	}
+
+	err = sc.WriteProfileD()
+	if err != nil {
+		sc.Compiler.Log.Error("Could not write .profile.d script: %s", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (sc *StaticfileCompiler) GetAppRootDir() (string, error) {
 	var rootDirRelative string
 
-	if sf.RootDir != "" {
-		rootDirRelative = sf.RootDir
+	if sc.Config.RootDir != "" {
+		rootDirRelative = sc.Config.RootDir
 	} else {
 		rootDirRelative = "."
 	}
 
-	rootDirAbs, err := filepath.Abs(filepath.Join(c.BuildDir, rootDirRelative))
+	rootDirAbs, err := filepath.Abs(filepath.Join(sc.Compiler.BuildDir, rootDirRelative))
 	if err != nil {
 		return "", err
 	}
 
-	c.Log.BeginStep("Root folder %s", rootDirAbs)
+	sc.Compiler.Log.BeginStep("Root folder %s", rootDirAbs)
 
 	dirInfo, err := os.Stat(rootDirAbs)
 	if err != nil {
@@ -119,10 +132,10 @@ func (c *StaticfileCompiler) GetAppRootDir(sf Staticfile) (string, error) {
 	return rootDirAbs, nil
 }
 
-func (c *StaticfileCompiler) copyFilesToPublic(appRootDir string, sf Staticfile) error {
-	c.Log.BeginStep("Copying project files into public")
+func (sc *StaticfileCompiler) copyFilesToPublic(appRootDir string) error {
+	sc.Compiler.Log.BeginStep("Copying project files into public")
 
-	publicDir := filepath.Join(c.BuildDir, "public")
+	publicDir := filepath.Join(sc.Compiler.BuildDir, "public")
 
 	if publicDir == appRootDir {
 		return nil
@@ -143,7 +156,7 @@ func (c *StaticfileCompiler) copyFilesToPublic(appRootDir string, sf Staticfile)
 			continue
 		}
 
-		if strings.HasPrefix(file.Name(), ".") && !sf.HostDotFiles {
+		if strings.HasPrefix(file.Name(), ".") && !sc.Config.HostDotFiles {
 			continue
 		}
 
@@ -161,21 +174,21 @@ func (c *StaticfileCompiler) copyFilesToPublic(appRootDir string, sf Staticfile)
 	return nil
 }
 
-func (c *StaticfileCompiler) setupNginx() error {
-	c.Log.BeginStep("Setting up nginx")
+func (sc *StaticfileCompiler) setupNginx() error {
+	sc.Compiler.Log.BeginStep("Setting up nginx")
 
-	nginx, err := c.Manifest.DefaultVersion("nginx")
+	nginx, err := sc.Compiler.Manifest.DefaultVersion("nginx")
 	if err != nil {
 		return err
 	}
-	c.Log.Info("Using Nginx version %s", nginx.Version)
+	sc.Compiler.Log.Info("Using Nginx version %s", nginx.Version)
 
-	err = c.Manifest.FetchDependency(nginx, "/tmp/nginx.tgz")
+	err = sc.Compiler.Manifest.FetchDependency(nginx, "/tmp/nginx.tgz")
 	if err != nil {
 		return err
 	}
 
-	err = bp.ExtractTarGz("/tmp/nginx.tgz", c.BuildDir)
+	err = bp.ExtractTarGz("/tmp/nginx.tgz", sc.Compiler.BuildDir)
 	if err != nil {
 		return err
 	}
@@ -184,14 +197,14 @@ func (c *StaticfileCompiler) setupNginx() error {
 
 	for _, file := range confFiles {
 		var source string
-		confDest := filepath.Join(c.BuildDir, "nginx", "conf", file)
-		customConfFile := filepath.Join(c.BuildDir, "public", file)
+		confDest := filepath.Join(sc.Compiler.BuildDir, "nginx", "conf", file)
+		customConfFile := filepath.Join(sc.Compiler.BuildDir, "public", file)
 
 		_, err = os.Stat(customConfFile)
 		if err == nil {
 			source = customConfFile
 		} else {
-			source = filepath.Join(c.Manifest.RootDir(), "conf", file)
+			source = filepath.Join(sc.Compiler.Manifest.RootDir(), "conf", file)
 		}
 
 		err = bp.CopyFile(source, confDest)
@@ -200,65 +213,65 @@ func (c *StaticfileCompiler) setupNginx() error {
 		}
 	}
 
-	authFile := filepath.Join(c.BuildDir, "Staticfile.auth")
+	authFile := filepath.Join(sc.Compiler.BuildDir, "Staticfile.auth")
 	_, err = os.Stat(authFile)
 	if err == nil {
-		c.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
-		e := bp.CopyFile(authFile, filepath.Join(c.BuildDir, "nginx", "conf", ".htpasswd"))
+		sc.Compiler.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
+		e := bp.CopyFile(authFile, filepath.Join(sc.Compiler.BuildDir, "nginx", "conf", ".htpasswd"))
 		if e != nil {
 			return e
 		}
-		c.Log.Protip("Learn about basic authentication", "http://docs.cloudfoundry.org/buildpacks/staticfile/index.html#authentication")
+		sc.Compiler.Log.Protip("Learn about basic authentication", "http://docs.cloudfoundry.org/buildpacks/staticfile/index.html#authentication")
 	}
 
 	return nil
 }
 
-func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
+func (sc *StaticfileCompiler) applyStaticfileConfig() error {
 	var err error
-	nginxConfDir := filepath.Join(c.BuildDir, "nginx", "conf")
+	nginxConfDir := filepath.Join(sc.Compiler.BuildDir, "nginx", "conf")
 
-	if sf.HostDotFiles {
-		c.Log.BeginStep("Enabling hosting of dotfiles")
+	if sc.Config.HostDotFiles {
+		sc.Compiler.Log.BeginStep("Enabling hosting of dotfiles")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_dotfiles"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
 	}
 
-	if sf.LocationInclude != "" {
-		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_location_include"), []byte(sf.LocationInclude), 0666)
+	if sc.Config.LocationInclude != "" {
+		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_location_include"), []byte(sc.Config.LocationInclude), 0666)
 		if err != nil {
 			return err
 		}
 	}
 
-	if sf.DirectoryIndex != "" {
-		c.Log.BeginStep("Enabling directory index for folders without index.html files")
+	if sc.Config.DirectoryIndex != "" {
+		sc.Compiler.Log.BeginStep("Enabling directory index for folders without index.html files")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_directory_index"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
 	}
 
-	if sf.SSI == "enabled" {
-		c.Log.BeginStep("Enabling SSI")
+	if sc.Config.SSI == "enabled" {
+		sc.Compiler.Log.BeginStep("Enabling SSI")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_ssi"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
 	}
 
-	if sf.PushState == "enabled" {
-		c.Log.BeginStep("Enabling pushstate")
+	if sc.Config.PushState == "enabled" {
+		sc.Compiler.Log.BeginStep("Enabling pushstate")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_pushstate"), []byte("x"), 0666)
 		if err != nil {
 			return err
 		}
 	}
 
-	if sf.HSTS {
-		c.Log.BeginStep("Enabling HSTS")
+	if sc.Config.HSTS {
+		sc.Compiler.Log.BeginStep("Enabling HSTS")
 		err = ioutil.WriteFile(filepath.Join(nginxConfDir, ".enable_hsts"), []byte("x"), 0666)
 		if err != nil {
 			return err
@@ -268,13 +281,13 @@ func (c *StaticfileCompiler) applyStaticfileConfig(sf Staticfile) error {
 	return nil
 }
 
-func (c *StaticfileCompiler) WriteProfileD() error {
-	err := os.MkdirAll(filepath.Join(c.BuildDir, ".profile.d"), 0755)
+func (sc *StaticfileCompiler) WriteProfileD() error {
+	err := os.MkdirAll(filepath.Join(sc.Compiler.BuildDir, ".profile.d"), 0755)
 	if err != nil {
 		return err
 	}
 
-	script := filepath.Join(c.BuildDir, ".profile.d", "staticfile.sh")
+	script := filepath.Join(sc.Compiler.BuildDir, ".profile.d", "staticfile.sh")
 
 	err = ioutil.WriteFile(script, []byte(InitScript), 0755)
 	if err != nil {
