@@ -18,8 +18,19 @@ var InitScript = `
 export APP_ROOT=$HOME
 export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 
-sed -ie "s/##APP_ROOT##/$APP_ROOT/g" $APP_ROOT/nginx/conf/nginx.conf
-sed -ie "s/##PORT##/$PORT/g" $APP_ROOT/nginx/conf/nginx.conf
+if [ -z ${FORCE_HTTPS-} ]; then
+  force_https_conf = ""
+else
+  force_https_conf << HEREDOC
+         if ($http_x_forwarded_proto != "https") {
+          return 301 https://$host$request_uri;
+        }
+  HEREDOC
+fi
+
+sed -ie 's@##APP_ROOT##@'"$APP_ROOT"'@g' $APP_ROOT/nginx/conf/nginx.conf
+sed -ie 's@##PORT##@'"$PORT"'@g' $APP_ROOT/nginx/conf/nginx.conf
+sed -ie 's@##FORCE_HTTPS##@'"$force_https_conf"'@g' $APP_ROOT/nginx/conf/nginx.conf
 
 if [[ ! -f $APP_ROOT/nginx/logs/access.log ]]; then
     mkfifo $APP_ROOT/nginx/logs/access.log
