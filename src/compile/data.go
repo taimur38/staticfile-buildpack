@@ -21,11 +21,11 @@ export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 if [ -z ${FORCE_HTTPS-} ]; then
   force_https_conf = ""
 else
-  force_https_conf << HEREDOC
-         if ($http_x_forwarded_proto != "https") {
-          return 301 https://$host$request_uri;
+  force_https_conf="
+        if (\$http_x_forwarded_proto != \"https\") {
+          return 301 https://\$host\$request_uri;
         }
-  HEREDOC
+"
 fi
 
 sed -ie 's@##APP_ROOT##@'"$APP_ROOT"'@g' $APP_ROOT/nginx/conf/nginx.conf
