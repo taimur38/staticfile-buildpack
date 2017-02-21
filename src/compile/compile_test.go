@@ -62,6 +62,14 @@ var _ = Describe("Compile", func() {
 			YAML:   mockYaml}
 	})
 
+	AfterEach(func() {
+		err = os.RemoveAll(buildDir)
+		Expect(err).To(BeNil())
+
+		err = os.RemoveAll(cacheDir)
+		Expect(err).To(BeNil())
+	})
+
 	Describe("LoadStaticfile", func() {
 		Context("the staticfile does not exist", func() {
 			BeforeEach(func() {
@@ -659,6 +667,11 @@ var _ = Describe("Compile", func() {
 			}
 
 			err = compiler.CopyFilesToPublic(appRootDir)
+			Expect(err).To(BeNil())
+		})
+
+		AfterEach(func() {
+			err = os.RemoveAll(appRootDir)
 			Expect(err).To(BeNil())
 		})
 
