@@ -166,18 +166,6 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 	return nil
 }
 
-func (sc *StaticfileCompiler) generateNginxConf() (string, error) {
-	buffer := new(bytes.Buffer)
-
-	t := template.Must(template.New("nginx.conf").Parse(NginxConfTemplate))
-
-	err := t.Execute(buffer, sc.Config)
-	if err != nil {
-		return "", err
-	}
-	return buffer.String(), nil
-}
-
 func (sc *StaticfileCompiler) GetAppRootDir() (string, error) {
 	var rootDirRelative string
 
@@ -310,6 +298,18 @@ func (sc *StaticfileCompiler) ConfigureNginx() error {
 	}
 
 	return nil
+}
+
+func (sc *StaticfileCompiler) generateNginxConf() (string, error) {
+	buffer := new(bytes.Buffer)
+
+	t := template.Must(template.New("nginx.conf").Parse(NginxConfTemplate))
+
+	err := t.Execute(buffer, sc.Config)
+	if err != nil {
+		return "", err
+	}
+	return buffer.String(), nil
 }
 
 func (sc *StaticfileCompiler) WriteProfileD() error {
