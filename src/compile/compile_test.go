@@ -29,6 +29,7 @@ var _ = Describe("Compile", func() {
 		logger   bp.Logger
 		mockCtrl *gomock.Controller
 		mockYaml *MockYAML
+		buffer   *bytes.Buffer
 	)
 
 	BeforeEach(func() {
@@ -41,8 +42,10 @@ var _ = Describe("Compile", func() {
 		manifest, err = bp.NewManifest("fixtures/standard_manifest")
 		Expect(err).To(BeNil())
 
+		buffer = new(bytes.Buffer)
+
 		logger = bp.NewLogger()
-		logger.SetOutput(ioutil.Discard)
+		logger.SetOutput(buffer)
 
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockYaml = NewMockYAML(mockCtrl)
@@ -82,37 +85,148 @@ var _ = Describe("Compile", func() {
 				Expect(compiler.Config.ForceHTTPS).To(Equal(false))
 				Expect(compiler.Config.BasicAuth).To(Equal(false))
 			})
-		})
-		Context("the staticfile exists and is valid", func() {
-			BeforeEach(func() {
-				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
-					(*hash)["root"] = "root_test"
-					(*hash)["host_dot_files"] = "true"
-					(*hash)["location_include"] = "location_include_test"
-					(*hash)["directory"] = "any_string"
-					(*hash)["ssi"] = "enabled"
-					(*hash)["pushstate"] = "enabled"
-					(*hash)["http_strict_transport_security"] = "enabled"
-					(*hash)["force_https"] = "enabled"
-				})
 
-				ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("some credentials"), 0666)
+			It("does not log enabling statements", func() {
+				Expect(buffer.String()).To(Equal(""))
 			})
-
-			It("loads the staticfile into the compiler struct", func() {
+		})
+		Context("the staticfile exists", func() {
+			JustBeforeEach(func() {
 				err = compiler.LoadStaticfile()
 				Expect(err).To(BeNil())
-				Expect(compiler.Config.RootDir).To(Equal("root_test"))
-				Expect(compiler.Config.HostDotFiles).To(Equal(true))
-				Expect(compiler.Config.LocationInclude).To(Equal("location_include_test"))
-				Expect(compiler.Config.DirectoryIndex).To(Equal(true))
-				Expect(compiler.Config.SSI).To(Equal(true))
-				Expect(compiler.Config.PushState).To(Equal(true))
-				Expect(compiler.Config.HSTS).To(Equal(true))
-				Expect(compiler.Config.ForceHTTPS).To(Equal(true))
-				Expect(compiler.Config.BasicAuth).To(Equal(true))
+			})
+
+			Context("and sets root", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["root"] = "root_test"
+					})
+				})
+				It("sets RootDir", func() {
+					Expect(compiler.Config.RootDir).To(Equal("root_test"))
+				})
+			})
+
+			Context("and sets host_dot_files", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["host_dot_files"] = "true"
+					})
+				})
+				It("sets HostDotFiles", func() {
+					Expect(compiler.Config.HostDotFiles).To(Equal(true))
+				})
+				It("Logs", func() {
+					Expect(buffer.String()).To(Equal("-----> Enabling hosting of dotfiles\n"))
+				})
+			})
+
+			Context("and sets location_include", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["location_include"] = "a/b/c"
+					})
+				})
+				It("sets location_include", func() {
+					Expect(compiler.Config.LocationInclude).To(Equal("a/b/c"))
+				})
+				It("Logs", func() {
+					Expect(buffer.String()).To(Equal("-----> Enabling location include file a/b/c\n"))
+				})
+			})
+
+			Context("and sets directory", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["directory"] = "any_string"
+					})
+				})
+				It("sets location_include", func() {
+					Expect(compiler.Config.DirectoryIndex).To(Equal(true))
+				})
+				It("Logs", func() {
+					Expect(buffer.String()).To(Equal("-----> Enabling directory index for folders without index.html files\n"))
+				})
+			})
+
+			Context("and sets ssi", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["ssi"] = "enabled"
+					})
+				})
+				It("sets ssi", func() {
+					Expect(compiler.Config.SSI).To(Equal(true))
+				})
+				It("Logs", func() {
+					Expect(buffer.String()).To(Equal("-----> Enabling SSI\n"))
+				})
+			})
+
+			Context("and sets pushstate", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["pushstate"] = "enabled"
+					})
+				})
+				It("sets pushstate", func() {
+					Expect(compiler.Config.PushState).To(Equal(true))
+				})
+				It("Logs", func() {
+					Expect(buffer.String()).To(Equal("-----> Enabling pushstate\n"))
+				})
+			})
+
+			Context("and sets http_strict_transport_security", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["http_strict_transport_security"] = "true"
+					})
+				})
+				It("sets pushstate", func() {
+					Expect(compiler.Config.HSTS).To(Equal(true))
+				})
+				It("Logs", func() {
+					Expect(buffer.String()).To(Equal("-----> Enabling HSTS\n"))
+				})
+			})
+
+			Context("and sets force_https", func() {
+				BeforeEach(func() {
+					mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+						(*hash)["force_https"] = "true"
+					})
+				})
+				It("sets force_https", func() {
+					Expect(compiler.Config.ForceHTTPS).To(Equal(true))
+				})
+				It("Logs", func() {
+					Expect(buffer.String()).To(Equal("-----> Enabling HTTPS redirect\n"))
+				})
 			})
 		})
+
+		Context("Staticfile.auth is present", func() {
+			BeforeEach(func() {
+				mockYaml.EXPECT().Load(gomock.Any(), gomock.Any())
+
+				err = ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("some credentials"), 0666)
+				Expect(err).To(BeNil())
+			})
+
+			JustBeforeEach(func() {
+				err = compiler.LoadStaticfile()
+				Expect(err).To(BeNil())
+			})
+
+			It("sets BasicAuth", func() {
+				Expect(compiler.Config.BasicAuth).To(Equal(true))
+			})
+			It("Logs", func() {
+				Expect(buffer.String()).To(ContainSubstring("-----> Enabling basic authentication using Staticfile.auth\n"))
+			})
+		})
+
 		Context("the staticfile exists and is not valid", func() {
 			BeforeEach(func() {
 				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Return(errors.New("a yaml parsing error"))
@@ -123,43 +237,12 @@ var _ = Describe("Compile", func() {
 				Expect(err).NotTo(BeNil())
 			})
 		})
-
-		Context("one at a time; logging", func() {
-			var (
-				buffer *bytes.Buffer
-			)
-			BeforeEach(func() {
-				buffer = new(bytes.Buffer)
-				logger = bp.NewLogger()
-				logger.SetOutput(buffer)
-			})
-
-			AfterEach(func() {
-				mockCtrl.Finish()
-			})
-
-			It("lJBZ", func() {
-				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
-					(*hash)["ssi"] = "enabled"
-				})
-
-				err = compiler.LoadStaticfile()
-				Expect(err).To(BeNil())
-				Expect(buffer.String()).To(ContainSubstring("-----> Enabling SSI"))
-			})
-		})
 	})
 
 	Describe("GetAppRootDir", func() {
 		var (
-			buffer    *bytes.Buffer
 			returnDir string
 		)
-		BeforeEach(func() {
-			buffer = new(bytes.Buffer)
-			logger = bp.NewLogger()
-			logger.SetOutput(buffer)
-		})
 
 		Context("the staticfile has a root directory specified", func() {
 			Context("the directory does not exist", func() {
