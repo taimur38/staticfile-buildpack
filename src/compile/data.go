@@ -116,7 +116,7 @@ http {
       {{end}}
     }
 
-  {{if .HostDotFiles}}
+  {{if not .HostDotFiles}}
     location ~ /\. {
       deny all;
       return 404;

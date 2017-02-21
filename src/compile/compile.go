@@ -118,11 +118,12 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 	}
 
 	for key, value := range hash {
+		isEnabled := (value == "enabled" || value == "true")
 		switch key {
 		case "root":
 			conf.RootDir = value
 		case "host_dot_files":
-			if value == "true" {
+			if isEnabled {
 				sc.Compiler.Log.BeginStep("Enabling hosting of dotfiles")
 				conf.HostDotFiles = true
 			}
@@ -134,22 +135,22 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 				conf.DirectoryIndex = true
 			}
 		case "ssi":
-			if value == "enabled" {
+			if isEnabled {
 				sc.Compiler.Log.BeginStep("Enabling SSI")
 				conf.SSI = true
 			}
 		case "pushstate":
-			if value == "enabled" {
+			if isEnabled {
 				sc.Compiler.Log.BeginStep("Enabling pushstate")
 				conf.PushState = true
 			}
 		case "http_strict_transport_security":
-			if value == "true" {
+			if isEnabled {
 				sc.Compiler.Log.BeginStep("Enabling HSTS")
-				conf.HSTS = (value == "true")
+				conf.HSTS = true
 			}
 		case "force_https":
-			conf.ForceHTTPS = (value == "true")
+			conf.ForceHTTPS = isEnabled
 		}
 	}
 
