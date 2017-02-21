@@ -330,6 +330,11 @@ var _ = Describe("Compile", func() {
 			profileDScript = filepath.Join(buildDir, ".profile.d", "staticfile.sh")
 		})
 
+		JustBeforeEach(func() {
+			err = compiler.WriteProfileD()
+			Expect(err).To(BeNil())
+		})
+
 		Context(".profile.d directory exists", func() {
 			BeforeEach(func() {
 				err = os.Mkdir(filepath.Join(buildDir, ".profile.d"), 0777)
@@ -337,8 +342,6 @@ var _ = Describe("Compile", func() {
 			})
 
 			It("creates the file as an executable", func() {
-				err = compiler.WriteProfileD()
-				Expect(err).To(BeNil())
 				Expect(profileDScript).To(BeAnExistingFile())
 
 				info, err = os.Stat(profileDScript)
@@ -351,8 +354,6 @@ var _ = Describe("Compile", func() {
 		})
 		Context(".profile.d directory does not exist", func() {
 			It("creates the file as an executable", func() {
-				err = compiler.WriteProfileD()
-				Expect(err).To(BeNil())
 				Expect(profileDScript).To(BeAnExistingFile())
 
 				info, err = os.Stat(profileDScript)
