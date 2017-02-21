@@ -643,4 +643,90 @@ var _ = Describe("Compile", func() {
 			Expect(buffer.String()).To(ContainSubstring("       Using nginx version 99.99"))
 		})
 	})
+
+	Describe("CopyFilesToPublic", func() {
+		var (
+			appRootDir    string
+			buildDirFiles []string
+		)
+
+		JustBeforeEach(func() {
+			buildDirFiles = []string{"Staticfile", "Staticfile.auth", "manifest.yml", ".profile", "stackato.yml", ".hidden.html", "index.html"}
+
+			for _, file := range buildDirFiles {
+				err = ioutil.WriteFile(filepath.Join(appRootDir, file), []byte(file+"contents"), 0644)
+				Expect(err).To(BeNil())
+			}
+
+			err = compiler.CopyFilesToPublic(appRootDir)
+			Expect(err).To(BeNil())
+		})
+
+		Context("The appRootDir is <buildDir>/public", func() {
+			BeforeEach(func() {
+				appRootDir = filepath.Join(buildDir, "public")
+				err = os.MkdirAll(appRootDir, 0755)
+				Expect(err).To(BeNil())
+
+				err = ioutil.WriteFile(filepath.Join(appRootDir, "index2.html"), []byte("html contents"), 0644)
+			})
+
+			It("doesn't copy any files", func() {
+				for _, file := range buildDirFiles {
+					_, err = os.Stat(filepath.Join(buildDir, file))
+					Expect(os.IsNotExist(err)).To(BeTrue())
+				}
+
+				Expect(filepath.Join(appRootDir, "index2.html")).To(BeAnExistingFile())
+			})
+		})
+
+		Context("The appRootDir is NOT <buildDir>/public", func() {
+			Context("host dotfiles is set", func() {
+				BeforeEach(func() {
+					sf.HostDotFiles = true
+					appRootDir, err = ioutil.TempDir("", "app_root")
+					Expect(err).To(BeNil())
+				})
+
+				It("Moves the dot files to public/", func() {
+					Expect(filepath.Join(buildDir, "public", ".hidden.html")).To(BeAnExistingFile())
+				})
+
+				It("Moves the regular files to public/", func() {
+					Expect(filepath.Join(buildDir, "public", "index.html")).To(BeAnExistingFile())
+				})
+
+				It("Does not move the blacklisted files to public/", func() {
+					Expect(filepath.Join(buildDir, "public", "Staticfile")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", "Staticfile.auth")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", "manifest.yml")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", ".profile")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", "stackato.yml")).ToNot(BeAnExistingFile())
+				})
+			})
+			Context("host dotfiles is NOT set", func() {
+				BeforeEach(func() {
+					sf.HostDotFiles = false
+					appRootDir = buildDir
+				})
+
+				It("does NOT move the dot files to public/", func() {
+					Expect(filepath.Join(buildDir, "public", ".hidden.html")).NotTo(BeAnExistingFile())
+				})
+
+				It("Moves the regular files to public/", func() {
+					Expect(filepath.Join(buildDir, "public", "index.html")).To(BeAnExistingFile())
+				})
+
+				It("Does not move the blacklisted files to public/", func() {
+					Expect(filepath.Join(buildDir, "public", "Staticfile")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", "Staticfile.auth")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", "manifest.yml")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", ".profile")).ToNot(BeAnExistingFile())
+					Expect(filepath.Join(buildDir, "public", "stackato.yml")).ToNot(BeAnExistingFile())
+				})
+			})
+		})
+	})
 })
