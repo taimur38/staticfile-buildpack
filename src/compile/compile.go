@@ -57,6 +57,54 @@ func main() {
 	compiler.StagingComplete()
 }
 
+func (sc *StaticfileCompiler) Compile() error {
+	var err error
+
+	err = sc.LoadStaticfile()
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to load Staticfile: %s", err.Error())
+		return err
+	}
+
+	appRootDir, err := sc.GetAppRootDir()
+	if err != nil {
+		sc.Compiler.Log.Error("Invalid root directory: %s", err.Error())
+		return err
+	}
+
+	err = sc.CopyFilesToPublic(appRootDir)
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to copy project files: %s", err.Error())
+		return err
+	}
+
+	err = sc.InstallNginx()
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to install nginx: %s", err.Error())
+		return err
+	}
+
+	nginxConf, err := sc.GenerateNginxConf()
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to generate nginx.conf: %s", err.Error())
+		return err
+	}
+
+	err = sc.ConfigureNginx(nginxConf)
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to configure nginx: %s", err.Error())
+		return err
+	}
+
+	err = sc.WriteProfileD()
+	if err != nil {
+		sc.Compiler.Log.Error("Could not write .profile.d script: %s", err.Error())
+		return err
+	}
+
+	return nil
+}
+
 func (sc *StaticfileCompiler) LoadStaticfile() error {
 	var hash map[string]string
 	conf := &sc.Config
@@ -111,54 +159,6 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 		conf.BasicAuth = true
 		sc.Compiler.Log.BeginStep("Enabling basic authentication using Staticfile.auth")
 		sc.Compiler.Log.Protip("Learn about basic authentication", "http://docs.cloudfoundry.org/buildpacks/staticfile/index.html#authentication")
-	}
-
-	return nil
-}
-
-func (sc *StaticfileCompiler) Compile() error {
-	var err error
-
-	err = sc.LoadStaticfile()
-	if err != nil {
-		sc.Compiler.Log.Error("Unable to load Staticfile: %s", err.Error())
-		return err
-	}
-
-	appRootDir, err := sc.GetAppRootDir()
-	if err != nil {
-		sc.Compiler.Log.Error("Invalid root directory: %s", err.Error())
-		return err
-	}
-
-	err = sc.CopyFilesToPublic(appRootDir)
-	if err != nil {
-		sc.Compiler.Log.Error("Unable to copy project files: %s", err.Error())
-		return err
-	}
-
-	err = sc.InstallNginx()
-	if err != nil {
-		sc.Compiler.Log.Error("Unable to install nginx: %s", err.Error())
-		return err
-	}
-
-	nginxConf, err := sc.GenerateNginxConf()
-	if err != nil {
-		sc.Compiler.Log.Error("Unable to generate nginx.conf: %s", err.Error())
-		return err
-	}
-
-	err = sc.ConfigureNginx(nginxConf)
-	if err != nil {
-		sc.Compiler.Log.Error("Unable to configure nginx: %s", err.Error())
-		return err
-	}
-
-	err = sc.WriteProfileD()
-	if err != nil {
-		sc.Compiler.Log.Error("Could not write .profile.d script: %s", err.Error())
-		return err
 	}
 
 	return nil

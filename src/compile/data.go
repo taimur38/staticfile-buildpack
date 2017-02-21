@@ -21,11 +21,7 @@ export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 if [ -z ${FORCE_HTTPS-} ]; then
   force_https_conf=""
 else
-  force_https_conf="
-        if (\$http_x_forwarded_proto != \"https\") {
-          return 301 https://\$host\$request_uri;
-        }
-"
+  force_https_conf="if (\$http_x_forwarded_proto != \"https\") { return 301 https://\$host\$request_uri; }"
 fi
 
 sed -ie 's@##APP_ROOT##@'"$APP_ROOT"'@g' $APP_ROOT/nginx/conf/nginx.conf
@@ -81,26 +77,26 @@ http {
 
     location / {
       root ##APP_ROOT##/public;
-      
+
       {{if .PushState}}
         if (!-e $request_filename) {
           rewrite ^(.*)$ / break;
         }
       {{end}}
-      
+
       index index.html index.htm Default.htm;
-      
+
       {{if .DirectoryIndex}}
         autoindex on;
-      {{end}}      
-      
+      {{end}}
+
       {{if .BasicAuth}}
         auth_basic "Restricted";  #For Basic Auth
         auth_basic_user_file ##APP_ROOT##/nginx/conf/.htpasswd;
       {{end}}
 
       {{if .ForceHTTPS}}
-         if ($http_x_forwarded_proto != "https") {
+        if ($http_x_forwarded_proto != "https") {
           return 301 https://$host$request_uri;
         }
       {{else}}
@@ -113,8 +109,8 @@ http {
 
       {{if .HSTS}}
         add_header Strict-Transport-Security "max-age=31536000";
-      {{end}}      
-      
+      {{end}}
+
       {{if ne .LocationInclude ""}}
         include {{.LocationInclude}};
       {{end}}
