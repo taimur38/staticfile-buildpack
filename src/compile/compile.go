@@ -13,25 +13,6 @@ import (
 	bp "github.com/cloudfoundry/libbuildpack"
 )
 
-type YAML interface {
-	Load(file string, obj interface{}) error
-	Write(dest string, obj interface{}) error
-}
-
-type yaml struct {
-}
-
-func NewYaml() YAML {
-	return &yaml{}
-}
-
-func (y *yaml) Load(file string, obj interface{}) error {
-	return bp.LoadYAML(file, obj)
-}
-func (y *yaml) Write(dest string, obj interface{}) error {
-	return bp.WriteYAML(dest, obj)
-}
-
 type Staticfile struct {
 	RootDir         string `yaml:"root"`
 	HostDotFiles    bool   `yaml:"host_dot_files"`
@@ -47,7 +28,7 @@ type Staticfile struct {
 type StaticfileCompiler struct {
 	Compiler *bp.Compiler
 	Config   Staticfile
-	YAML     YAML
+	YAML     bp.YAML
 }
 
 var skipCopyFile = map[string]bool{
@@ -68,7 +49,7 @@ func main() {
 		panic(err)
 	}
 
-	sc := StaticfileCompiler{Compiler: compiler, Config: Staticfile{}, YAML: &yaml{}}
+	sc := StaticfileCompiler{Compiler: compiler, Config: Staticfile{}, YAML: bp.NewYAML()}
 	err = sc.Compile()
 	if err != nil {
 		panic(err)

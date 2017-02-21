@@ -2,6 +2,7 @@ package main_test
 
 import (
 	c "compile"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-//go:generate mockgen -source=compile.go -package=main_test -destination=mocks_test.go
+//go:generate mockgen -source=vendor/github.com/cloudfoundry/libbuildpack/yaml.go --destination=mocks_yaml_test.go --package=main_test
 
 var _ = Describe("Compile", func() {
 	var (
@@ -26,7 +27,8 @@ var _ = Describe("Compile", func() {
 		manifest bp.Manifest
 		compiler *c.StaticfileCompiler
 		logger   bp.Logger
-		yaml     c.YAML
+		mockCtrl *gomock.Controller
+		mockYaml *MockYAML
 	)
 
 	BeforeEach(func() {
@@ -42,7 +44,8 @@ var _ = Describe("Compile", func() {
 		logger = bp.NewLogger()
 		logger.SetOutput(ioutil.Discard)
 
-		yaml = c.NewYaml()
+		mockCtrl = gomock.NewController(GinkgoT())
+		mockYaml = NewMockYAML(mockCtrl)
 	})
 
 	JustBeforeEach(func() {
@@ -53,13 +56,13 @@ var _ = Describe("Compile", func() {
 
 		compiler = &c.StaticfileCompiler{Compiler: bpc,
 			Config: sf,
-			YAML:   yaml}
+			YAML:   mockYaml}
 	})
 
 	Describe("LoadStaticfile", func() {
 		Context("the staticfile does not exist", func() {
 			BeforeEach(func() {
-				buildDir = "fixtures/no_staticfile"
+				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Return(os.ErrNotExist)
 			})
 			It("does not return an error", func() {
 				err = compiler.LoadStaticfile()
@@ -82,7 +85,18 @@ var _ = Describe("Compile", func() {
 		})
 		Context("the staticfile exists and is valid", func() {
 			BeforeEach(func() {
-				buildDir = "fixtures/valid_staticfile"
+				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+					(*hash)["root"] = "root_test"
+					(*hash)["host_dot_files"] = "true"
+					(*hash)["location_include"] = "location_include_test"
+					(*hash)["directory"] = "any_string"
+					(*hash)["ssi"] = "enabled"
+					(*hash)["pushstate"] = "enabled"
+					(*hash)["http_strict_transport_security"] = "enabled"
+					(*hash)["force_https"] = "enabled"
+				})
+
+				ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("some credentials"), 0666)
 			})
 
 			It("loads the staticfile into the compiler struct", func() {
@@ -101,7 +115,7 @@ var _ = Describe("Compile", func() {
 		})
 		Context("the staticfile exists and is not valid", func() {
 			BeforeEach(func() {
-				buildDir = "fixtures/invalid_staticfile"
+				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Return(errors.New("a yaml parsing error"))
 			})
 
 			It("returns an error", func() {
@@ -112,25 +126,19 @@ var _ = Describe("Compile", func() {
 
 		Context("one at a time; logging", func() {
 			var (
-				mockCtrl *gomock.Controller
-				mockYaml *MockYAML
-				buffer   *bytes.Buffer
+				buffer *bytes.Buffer
 			)
 			BeforeEach(func() {
 				buffer = new(bytes.Buffer)
 				logger = bp.NewLogger()
 				logger.SetOutput(buffer)
-
-				mockCtrl = gomock.NewController(GinkgoT())
-				mockYaml = NewMockYAML(mockCtrl)
-				yaml = mockYaml
 			})
 
 			AfterEach(func() {
 				mockCtrl.Finish()
 			})
 
-			FIt("lJBZ", func() {
+			It("lJBZ", func() {
 				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
 					(*hash)["ssi"] = "enabled"
 				})
