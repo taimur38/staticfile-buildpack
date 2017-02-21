@@ -6,13 +6,16 @@ import (
 	"os"
 	"path/filepath"
 
-	bp "github.com/cloudfoundry/libbuildpack"
-
 	"bytes"
+
+	bp "github.com/cloudfoundry/libbuildpack"
+	"github.com/golang/mock/gomock"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+//go:generate mockgen -source=compile.go -package=main_test -destination=mocks_test.go
 
 var _ = Describe("Compile", func() {
 	var (
@@ -23,6 +26,7 @@ var _ = Describe("Compile", func() {
 		manifest bp.Manifest
 		compiler *c.StaticfileCompiler
 		logger   bp.Logger
+		yaml     c.YAML
 	)
 
 	BeforeEach(func() {
@@ -37,15 +41,19 @@ var _ = Describe("Compile", func() {
 
 		logger = bp.NewLogger()
 		logger.SetOutput(ioutil.Discard)
+
+		yaml = c.NewYaml()
 	})
 
 	JustBeforeEach(func() {
-
 		bpc := &bp.Compiler{BuildDir: buildDir,
 			CacheDir: cacheDir,
 			Manifest: manifest,
 			Log:      logger}
-		compiler = &c.StaticfileCompiler{Compiler: bpc, Config: sf}
+
+		compiler = &c.StaticfileCompiler{Compiler: bpc,
+			Config: sf,
+			YAML:   yaml}
 	})
 
 	Describe("LoadStaticfile", func() {
@@ -99,6 +107,37 @@ var _ = Describe("Compile", func() {
 			It("returns an error", func() {
 				err = compiler.LoadStaticfile()
 				Expect(err).NotTo(BeNil())
+			})
+		})
+
+		Context("one at a time; logging", func() {
+			var (
+				mockCtrl *gomock.Controller
+				mockYaml *MockYAML
+				buffer   *bytes.Buffer
+			)
+			BeforeEach(func() {
+				buffer = new(bytes.Buffer)
+				logger = bp.NewLogger()
+				logger.SetOutput(buffer)
+
+				mockCtrl = gomock.NewController(GinkgoT())
+				mockYaml = NewMockYAML(mockCtrl)
+				yaml = mockYaml
+			})
+
+			AfterEach(func() {
+				mockCtrl.Finish()
+			})
+
+			FIt("lJBZ", func() {
+				mockYaml.EXPECT().Load(filepath.Join(buildDir, "Staticfile"), gomock.Any()).Do(func(_ string, hash *map[string]string) {
+					(*hash)["ssi"] = "enabled"
+				})
+
+				err = compiler.LoadStaticfile()
+				Expect(err).To(BeNil())
+				Expect(buffer.String()).To(ContainSubstring("-----> Enabling SSI"))
 			})
 		})
 	})

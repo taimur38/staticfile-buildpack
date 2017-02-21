@@ -13,6 +13,25 @@ import (
 	bp "github.com/cloudfoundry/libbuildpack"
 )
 
+type YAML interface {
+	Load(file string, obj interface{}) error
+	Write(dest string, obj interface{}) error
+}
+
+type yaml struct {
+}
+
+func NewYaml() YAML {
+	return &yaml{}
+}
+
+func (y *yaml) Load(file string, obj interface{}) error {
+	return bp.LoadYAML(file, obj)
+}
+func (y *yaml) Write(dest string, obj interface{}) error {
+	return bp.WriteYAML(dest, obj)
+}
+
 type Staticfile struct {
 	RootDir         string `yaml:"root"`
 	HostDotFiles    bool   `yaml:"host_dot_files"`
@@ -28,6 +47,7 @@ type Staticfile struct {
 type StaticfileCompiler struct {
 	Compiler *bp.Compiler
 	Config   Staticfile
+	YAML     YAML
 }
 
 var skipCopyFile = map[string]bool{
@@ -48,7 +68,7 @@ func main() {
 		panic(err)
 	}
 
-	sc := StaticfileCompiler{Compiler: compiler, Config: Staticfile{}}
+	sc := StaticfileCompiler{Compiler: compiler, Config: Staticfile{}, YAML: &yaml{}}
 	err = sc.Compile()
 	if err != nil {
 		panic(err)
@@ -106,10 +126,10 @@ func (sc *StaticfileCompiler) Compile() error {
 }
 
 func (sc *StaticfileCompiler) LoadStaticfile() error {
-	var hash map[string]string
+	var hash = make(map[string]string)
 	conf := &sc.Config
 
-	err := bp.LoadYAML(filepath.Join(sc.Compiler.BuildDir, "Staticfile"), &hash)
+	err := sc.YAML.Load(filepath.Join(sc.Compiler.BuildDir, "Staticfile"), &hash)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -129,6 +149,9 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 			}
 		case "location_include":
 			conf.LocationInclude = value
+			if conf.LocationInclude != "" {
+				sc.Compiler.Log.BeginStep("Enabling location include file %s", conf.LocationInclude)
+			}
 		case "directory":
 			if value != "" {
 				sc.Compiler.Log.BeginStep("Enabling directory index for folders without index.html files")
@@ -150,7 +173,10 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 				conf.HSTS = true
 			}
 		case "force_https":
-			conf.ForceHTTPS = isEnabled
+			if isEnabled {
+				sc.Compiler.Log.BeginStep("Enabling HTTPS redirect")
+				conf.ForceHTTPS = true
+			}
 		}
 	}
 
