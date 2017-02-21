@@ -85,13 +85,7 @@ func (sc *StaticfileCompiler) Compile() error {
 		return err
 	}
 
-	nginxConf, err := sc.GenerateNginxConf()
-	if err != nil {
-		sc.Compiler.Log.Error("Unable to generate nginx.conf: %s", err.Error())
-		return err
-	}
-
-	err = sc.ConfigureNginx(nginxConf)
+	err = sc.ConfigureNginx()
 	if err != nil {
 		sc.Compiler.Log.Error("Unable to configure nginx: %s", err.Error())
 		return err
@@ -172,7 +166,7 @@ func (sc *StaticfileCompiler) LoadStaticfile() error {
 	return nil
 }
 
-func (sc *StaticfileCompiler) GenerateNginxConf() (string, error) {
+func (sc *StaticfileCompiler) generateNginxConf() (string, error) {
 	buffer := new(bytes.Buffer)
 
 	t := template.Must(template.New("nginx.conf").Parse(NginxConfTemplate))
@@ -276,10 +270,16 @@ func (sc *StaticfileCompiler) InstallNginx() error {
 	return nil
 }
 
-func (sc *StaticfileCompiler) ConfigureNginx(nginxConf string) error {
+func (sc *StaticfileCompiler) ConfigureNginx() error {
 	var err error
 
 	sc.Compiler.Log.BeginStep("Configuring nginx")
+
+	nginxConf, err := sc.generateNginxConf()
+	if err != nil {
+		sc.Compiler.Log.Error("Unable to generate nginx.conf: %s", err.Error())
+		return err
+	}
 
 	confFiles := map[string]string{
 		"nginx.conf": nginxConf,

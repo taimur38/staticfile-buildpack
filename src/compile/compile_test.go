@@ -30,6 +30,7 @@ var _ = Describe("Compile", func() {
 		mockCtrl *gomock.Controller
 		mockYaml *MockYAML
 		buffer   *bytes.Buffer
+		data     []byte
 	)
 
 	BeforeEach(func() {
@@ -317,6 +318,272 @@ var _ = Describe("Compile", func() {
 			It("returns the build directory", func() {
 				Expect(err).To(BeNil())
 				Expect(returnDir).To(Equal(buildDir))
+			})
+		})
+	})
+
+	Describe("ConfigureNginx", func() {
+		BeforeEach(func() {
+			err = os.MkdirAll(filepath.Join(buildDir, "nginx", "conf"), 0777)
+			Expect(err).To(BeNil())
+		})
+
+		JustBeforeEach(func() {
+			err = compiler.ConfigureNginx()
+			Expect(err).To(BeNil())
+		})
+
+		Context("custom nginx.conf exists", func() {
+			BeforeEach(func() {
+				err = os.MkdirAll(filepath.Join(buildDir, "public"), 0777)
+				Expect(err).To(BeNil())
+
+				err = ioutil.WriteFile(filepath.Join(buildDir, "public", "nginx.conf"), []byte("nginx configuration"), 0666)
+				Expect(err).To(BeNil())
+			})
+
+			It("uses the custom configuration", func() {
+				data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+				Expect(err).To(BeNil())
+				Expect(data).To(Equal([]byte("nginx configuration")))
+			})
+		})
+
+		Context("custom nginx.conf does NOT exist", func() {
+			hostDotConf := `
+    location ~ /\. {
+      deny all;
+      return 404;
+    }
+`
+			pushStateConf := `
+        if (!-e $request_filename) {
+          rewrite ^(.*)$ / break;
+        }
+`
+
+			forceHTTPSConf := `
+        if ($http_x_forwarded_proto != "https") {
+          return 301 https://$host$request_uri;
+        }
+`
+			basicAuthConf := `
+        auth_basic "Restricted";  #For Basic Auth
+        auth_basic_user_file ##APP_ROOT##/nginx/conf/.htpasswd;
+`
+			Context("host_dot_files is set in staticfile", func() {
+				BeforeEach(func() {
+					sf.HostDotFiles = true
+				})
+				It("allows dotfiles to be hosted", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring(hostDotConf))
+				})
+			})
+
+			Context("host_dot_files is NOT set in staticfile", func() {
+				BeforeEach(func() {
+					sf.HostDotFiles = false
+				})
+				It("allows dotfiles to be hosted", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring(hostDotConf))
+				})
+			})
+
+			Context("location_include is set in staticfile", func() {
+				BeforeEach(func() {
+					sf.LocationInclude = "a/b/c"
+				})
+				It("includes the file", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring("include a/b/c;"))
+				})
+			})
+
+			Context("location_include is NOT set in staticfile", func() {
+				BeforeEach(func() {
+					sf.LocationInclude = ""
+				})
+				It("does not include the file", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring("include ;"))
+				})
+			})
+
+			Context("directory is set in staticfile", func() {
+				BeforeEach(func() {
+					sf.DirectoryIndex = true
+				})
+				It("sets autoindex on", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring("autoindex on;"))
+				})
+			})
+
+			Context("directory is NOT set in staticfile", func() {
+				BeforeEach(func() {
+					sf.DirectoryIndex = false
+				})
+				It("does not set autoindex on", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring("autoindex on;"))
+				})
+			})
+
+			Context("ssi is set in staticfile", func() {
+				BeforeEach(func() {
+					sf.SSI = true
+				})
+				It("enables SSI", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring("ssi on;"))
+				})
+			})
+
+			Context("ssi is NOT set in staticfile", func() {
+				BeforeEach(func() {
+					sf.SSI = false
+				})
+				It("does not enable SSI", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring("ssi on;"))
+				})
+			})
+
+			Context("pushstate is set in staticfile", func() {
+				BeforeEach(func() {
+					sf.PushState = true
+				})
+				It("it adds the configuration", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring(pushStateConf))
+				})
+			})
+
+			Context("pushstate is NOT set in staticfile", func() {
+				BeforeEach(func() {
+					sf.PushState = false
+				})
+				It("it does not add the configuration", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring(pushStateConf))
+				})
+			})
+
+			Context("http_strict_transport_security is set in staticfile", func() {
+				BeforeEach(func() {
+					sf.HSTS = true
+				})
+				It("it adds the HSTS header", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring(`add_header Strict-Transport-Security "max-age=31536000";`))
+				})
+			})
+
+			Context("http_strict_transport_security is NOT set in staticfile", func() {
+				BeforeEach(func() {
+					sf.HSTS = false
+				})
+				It("it does not add the HSTS header", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring(`add_header Strict-Transport-Security "max-age=31536000";`))
+				})
+			})
+
+			Context("force_https is set in staticfile", func() {
+				BeforeEach(func() {
+					sf.ForceHTTPS = true
+				})
+				It("it adds the 301 redirect", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring(forceHTTPSConf))
+					Expect(string(data)).NotTo(ContainSubstring("##FORCE_HTTPS##"))
+				})
+			})
+
+			Context("force_https is NOT set in staticfile", func() {
+				BeforeEach(func() {
+					sf.ForceHTTPS = false
+				})
+				It("it does not add the 301 redirect", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring(forceHTTPSConf))
+					Expect(string(data)).To(ContainSubstring("##FORCE_HTTPS##"))
+				})
+			})
+
+			Context("there is a Staticfile.auth", func() {
+				BeforeEach(func() {
+					sf.BasicAuth = true
+					err = ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("authentication info"), 0666)
+					Expect(err).To(BeNil())
+				})
+
+				It("it enables basic authentication", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(ContainSubstring(basicAuthConf))
+				})
+
+				It("copies the Staticfile.auth to .htpasswd", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", ".htpasswd"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).To(Equal("authentication info"))
+				})
+			})
+
+			Context("there is not a Staticfile.auth", func() {
+				BeforeEach(func() {
+					sf.BasicAuth = false
+				})
+				It("it does not enable basic authenticaiont", func() {
+					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
+					Expect(err).To(BeNil())
+					Expect(string(data)).NotTo(ContainSubstring(basicAuthConf))
+				})
+
+				It("does not create an .htpasswd", func() {
+					Expect(filepath.Join(buildDir, "nginx", "conf", ".htpasswd")).NotTo(BeAnExistingFile())
+				})
+			})
+		})
+
+		Context("custom mime.types exists", func() {
+			BeforeEach(func() {
+				err = os.MkdirAll(filepath.Join(buildDir, "public"), 0777)
+				Expect(err).To(BeNil())
+
+				err = ioutil.WriteFile(filepath.Join(buildDir, "public", "mime.types"), []byte("mime types info"), 0666)
+				Expect(err).To(BeNil())
+			})
+
+			It("uses the custom configuration", func() {
+				data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "mime.types"))
+				Expect(err).To(BeNil())
+				Expect(data).To(Equal([]byte("mime types info")))
+			})
+		})
+
+		Context("custom mime.types does NOT exist", func() {
+			It("uses the provided mime.types", func() {
+				data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "mime.types"))
+				Expect(err).To(BeNil())
+				Expect(string(data)).To(Equal(c.MimeTypes))
 			})
 		})
 	})
