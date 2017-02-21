@@ -243,19 +243,9 @@ func (sc *StaticfileCompiler) InstallNginx() error {
 	if err != nil {
 		return err
 	}
-	sc.Compiler.Log.Info("Using Nginx version %s", nginx.Version)
+	sc.Compiler.Log.Info("Using nginx version %s", nginx.Version)
 
-	err = sc.Compiler.Manifest.FetchDependency(nginx, "/tmp/nginx.tgz")
-	if err != nil {
-		return err
-	}
-
-	err = bp.ExtractTarGz("/tmp/nginx.tgz", sc.Compiler.BuildDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return sc.Compiler.Manifest.InstallDependency(nginx, sc.Compiler.BuildDir)
 }
 
 func (sc *StaticfileCompiler) ConfigureNginx() error {

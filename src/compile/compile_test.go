@@ -17,20 +17,21 @@ import (
 )
 
 //go:generate mockgen -source=vendor/github.com/cloudfoundry/libbuildpack/yaml.go --destination=mocks_yaml_test.go --package=main_test
+//go:generate mockgen -source=vendor/github.com/cloudfoundry/libbuildpack/manifest.go --destination=mocks_manifest_test.go --package=main_test --imports=.=github.com/cloudfoundry/libbuildpack
 
 var _ = Describe("Compile", func() {
 	var (
-		sf       c.Staticfile
-		err      error
-		buildDir string
-		cacheDir string
-		manifest bp.Manifest
-		compiler *c.StaticfileCompiler
-		logger   bp.Logger
-		mockCtrl *gomock.Controller
-		mockYaml *MockYAML
-		buffer   *bytes.Buffer
-		data     []byte
+		sf           c.Staticfile
+		err          error
+		buildDir     string
+		cacheDir     string
+		compiler     *c.StaticfileCompiler
+		logger       bp.Logger
+		mockCtrl     *gomock.Controller
+		mockYaml     *MockYAML
+		mockManifest *MockManifest
+		buffer       *bytes.Buffer
+		data         []byte
 	)
 
 	BeforeEach(func() {
@@ -40,9 +41,6 @@ var _ = Describe("Compile", func() {
 		cacheDir, err = ioutil.TempDir("", "cache")
 		Expect(err).To(BeNil())
 
-		manifest, err = bp.NewManifest("fixtures/standard_manifest")
-		Expect(err).To(BeNil())
-
 		buffer = new(bytes.Buffer)
 
 		logger = bp.NewLogger()
@@ -50,12 +48,13 @@ var _ = Describe("Compile", func() {
 
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockYaml = NewMockYAML(mockCtrl)
+		mockManifest = NewMockManifest(mockCtrl)
 	})
 
 	JustBeforeEach(func() {
 		bpc := &bp.Compiler{BuildDir: buildDir,
 			CacheDir: cacheDir,
-			Manifest: manifest,
+			Manifest: mockManifest,
 			Log:      logger}
 
 		compiler = &c.StaticfileCompiler{Compiler: bpc,
@@ -629,6 +628,19 @@ var _ = Describe("Compile", func() {
 				// make sure at least 1 executable bit is set
 				Expect(info.Mode().Perm() & 0111).NotTo(Equal(0000))
 			})
+		})
+	})
+
+	Describe("InstallNginx", func() {
+		It("Installs nginx to builddir", func() {
+			dep := bp.Dependency{Name: "nginx", Version: "99.99"}
+
+			mockManifest.EXPECT().DefaultVersion("nginx").Return(dep, nil)
+			mockManifest.EXPECT().InstallDependency(dep, buildDir)
+
+			compiler.InstallNginx()
+			Expect(buffer.String()).To(ContainSubstring("-----> Installing nginx"))
+			Expect(buffer.String()).To(ContainSubstring("       Using nginx version 99.99"))
 		})
 	})
 })

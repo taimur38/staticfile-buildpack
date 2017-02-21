@@ -1,8 +1,0 @@
-root: root_test
-host_dot_files: true
-location_include: location_include_test
-directory: directory_test
-ssi: enabled 
-pushstate: enabled
-http_strict_transport_security: true
-force_https: true

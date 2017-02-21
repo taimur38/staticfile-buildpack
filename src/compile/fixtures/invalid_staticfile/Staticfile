@@ -1,7 +1,0 @@
-<PropertyGroup>
-    <TargetFramework>netcoreapp1.0</TargetFramework>
-    <PreserveCompilationContext>true</PreserveCompilationContext>
-    <AssemblyName>app_using_angular</AssemblyName>
-    <OutputType>Exe</OutputType>
-</PropertyGroup>
-
