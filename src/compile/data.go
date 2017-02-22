@@ -18,15 +18,8 @@ var InitScript = `
 export APP_ROOT=$HOME
 export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 
-if [ -z ${FORCE_HTTPS-} ]; then
-  force_https_conf=""
-else
-  force_https_conf="if (\$http_x_forwarded_proto != \"https\") { return 301 https://\$host\$request_uri; }"
-fi
-
-sed -ie 's@##APP_ROOT##@'"$APP_ROOT"'@g' $APP_ROOT/nginx/conf/nginx.conf
-sed -ie 's@##PORT##@'"$PORT"'@g' $APP_ROOT/nginx/conf/nginx.conf
-sed -ie 's@##FORCE_HTTPS##@'"$force_https_conf"'@g' $APP_ROOT/nginx/conf/nginx.conf
+mv $APP_ROOT/nginx/conf/nginx.conf $APP_ROOT/nginx/conf/nginx.conf.erb
+erb $APP_ROOT/nginx/conf/nginx.conf.erb > $APP_ROOT/nginx/conf/nginx.conf
 
 if [[ ! -f $APP_ROOT/nginx/logs/access.log ]]; then
     mkfifo $APP_ROOT/nginx/logs/access.log
@@ -44,13 +37,13 @@ var NginxConfTemplate = `
 worker_processes 1;
 daemon off;
 
-error_log ##APP_ROOT##/nginx/logs/error.log;
+error_log <%= ENV["APP_ROOT"] %>/nginx/logs/error.log;
 events { worker_connections 1024; }
 
 http {
   charset utf-8;
   log_format cloudfoundry '$http_x_forwarded_for - $http_referer - [$time_local] "$request" $status $body_bytes_sent';
-  access_log ##APP_ROOT##/nginx/logs/access.log cloudfoundry;
+  access_log <%= ENV["APP_ROOT"] %>/nginx/logs/access.log cloudfoundry;
   default_type application/octet-stream;
   include mime.types;
   sendfile on;
@@ -68,15 +61,15 @@ http {
 
   tcp_nopush on;
   keepalive_timeout 30;
-  port_in_redirect off; # Ensure that redirects don't include the internal container PORT - ##PORT##
+  port_in_redirect off; # Ensure that redirects don't include the internal container PORT - <%= ENV["PORT"] %>
   server_tokens off;
 
   server {
-    listen ##PORT##;
+    listen <%= ENV["PORT"] %>;
     server_name localhost;
 
     location / {
-      root ##APP_ROOT##/public;
+      root <%= ENV["APP_ROOT"] %>/public;
 
       {{if .PushState}}
         if (!-e $request_filename) {
@@ -92,7 +85,7 @@ http {
 
       {{if .BasicAuth}}
         auth_basic "Restricted";  #For Basic Auth
-        auth_basic_user_file ##APP_ROOT##/nginx/conf/.htpasswd;
+        auth_basic_user_file <%= ENV["APP_ROOT"] %>/nginx/conf/.htpasswd;
       {{end}}
 
       {{if .ForceHTTPS}}
@@ -100,7 +93,11 @@ http {
           return 301 https://$host$request_uri;
         }
       {{else}}
-        ##FORCE_HTTPS##
+      <% if ENV["FORCE_HTTPS"] %>
+        if ($http_x_forwarded_proto != "https") {
+          return 301 https://$host$request_uri;
+        }
+      <% end %>
       {{end}}
 
       {{if .SSI}}

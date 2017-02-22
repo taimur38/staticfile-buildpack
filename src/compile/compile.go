@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"html/template"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"bytes"
 
@@ -271,7 +271,7 @@ func (sc *StaticfileCompiler) ConfigureNginx() error {
 		if err == nil {
 			err = bp.CopyFile(customConfFile, confDest)
 		} else {
-			err = ioutil.WriteFile(confDest, []byte(contents), 0666)
+			err = ioutil.WriteFile(confDest, []byte(contents), 0644)
 		}
 
 		if err != nil {

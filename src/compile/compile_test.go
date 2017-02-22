@@ -218,7 +218,7 @@ var _ = Describe("Compile", func() {
 			BeforeEach(func() {
 				mockYaml.EXPECT().Load(gomock.Any(), gomock.Any())
 
-				err = ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("some credentials"), 0666)
+				err = ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("some credentials"), 0644)
 				Expect(err).To(BeNil())
 			})
 
@@ -278,7 +278,7 @@ var _ = Describe("Compile", func() {
 
 			Context("the directory exists but is actually a file", func() {
 				BeforeEach(func() {
-					ioutil.WriteFile(filepath.Join(buildDir, "actually_a_file"), []byte("xxx"), 0666)
+					ioutil.WriteFile(filepath.Join(buildDir, "actually_a_file"), []byte("xxx"), 0644)
 					sf.RootDir = "actually_a_file"
 				})
 
@@ -297,7 +297,7 @@ var _ = Describe("Compile", func() {
 
 			Context("the directory exists", func() {
 				BeforeEach(func() {
-					os.Mkdir(filepath.Join(buildDir, "a_directory"), 0777)
+					os.Mkdir(filepath.Join(buildDir, "a_directory"), 0755)
 					sf.RootDir = "a_directory"
 				})
 
@@ -331,7 +331,7 @@ var _ = Describe("Compile", func() {
 
 	Describe("ConfigureNginx", func() {
 		BeforeEach(func() {
-			err = os.MkdirAll(filepath.Join(buildDir, "nginx", "conf"), 0777)
+			err = os.MkdirAll(filepath.Join(buildDir, "nginx", "conf"), 0755)
 			Expect(err).To(BeNil())
 		})
 
@@ -342,10 +342,10 @@ var _ = Describe("Compile", func() {
 
 		Context("custom nginx.conf exists", func() {
 			BeforeEach(func() {
-				err = os.MkdirAll(filepath.Join(buildDir, "public"), 0777)
+				err = os.MkdirAll(filepath.Join(buildDir, "public"), 0755)
 				Expect(err).To(BeNil())
 
-				err = ioutil.WriteFile(filepath.Join(buildDir, "public", "nginx.conf"), []byte("nginx configuration"), 0666)
+				err = ioutil.WriteFile(filepath.Join(buildDir, "public", "nginx.conf"), []byte("nginx configuration"), 0644)
 				Expect(err).To(BeNil())
 			})
 
@@ -374,9 +374,17 @@ var _ = Describe("Compile", func() {
           return 301 https://$host$request_uri;
         }
 `
+			forceHTTPSErb := `
+      <% if ENV["FORCE_HTTPS"] %>
+        if ($http_x_forwarded_proto != "https") {
+          return 301 https://$host$request_uri;
+        }
+      <% end %>
+`
+
 			basicAuthConf := `
         auth_basic "Restricted";  #For Basic Auth
-        auth_basic_user_file ##APP_ROOT##/nginx/conf/.htpasswd;
+        auth_basic_user_file <%= ENV["APP_ROOT"] %>/nginx/conf/.htpasswd;
 `
 			Context("host_dot_files is set in staticfile", func() {
 				BeforeEach(func() {
@@ -514,11 +522,12 @@ var _ = Describe("Compile", func() {
 				BeforeEach(func() {
 					sf.ForceHTTPS = true
 				})
-				It("it adds the 301 redirect", func() {
+				It("the 301 redirect does not depend on ENV['FORCE_HTTPS']", func() {
 					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
 					Expect(err).To(BeNil())
 					Expect(string(data)).To(ContainSubstring(forceHTTPSConf))
-					Expect(string(data)).NotTo(ContainSubstring("##FORCE_HTTPS##"))
+					Expect(string(data)).NotTo(ContainSubstring(`<% if ENV["FORCE_HTTPS"] %>`))
+					Expect(string(data)).NotTo(ContainSubstring(`<% end %>`))
 				})
 			})
 
@@ -526,18 +535,17 @@ var _ = Describe("Compile", func() {
 				BeforeEach(func() {
 					sf.ForceHTTPS = false
 				})
-				It("it does not add the 301 redirect", func() {
+				It("the 301 redirect does depend on ENV['FORCE_HTTPS']", func() {
 					data, err = ioutil.ReadFile(filepath.Join(buildDir, "nginx", "conf", "nginx.conf"))
 					Expect(err).To(BeNil())
-					Expect(string(data)).NotTo(ContainSubstring(forceHTTPSConf))
-					Expect(string(data)).To(ContainSubstring("##FORCE_HTTPS##"))
+					Expect(string(data)).To(ContainSubstring(forceHTTPSErb))
 				})
 			})
 
 			Context("there is a Staticfile.auth", func() {
 				BeforeEach(func() {
 					sf.BasicAuth = true
-					err = ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("authentication info"), 0666)
+					err = ioutil.WriteFile(filepath.Join(buildDir, "Staticfile.auth"), []byte("authentication info"), 0644)
 					Expect(err).To(BeNil())
 				})
 
@@ -572,10 +580,10 @@ var _ = Describe("Compile", func() {
 
 		Context("custom mime.types exists", func() {
 			BeforeEach(func() {
-				err = os.MkdirAll(filepath.Join(buildDir, "public"), 0777)
+				err = os.MkdirAll(filepath.Join(buildDir, "public"), 0755)
 				Expect(err).To(BeNil())
 
-				err = ioutil.WriteFile(filepath.Join(buildDir, "public", "mime.types"), []byte("mime types info"), 0666)
+				err = ioutil.WriteFile(filepath.Join(buildDir, "public", "mime.types"), []byte("mime types info"), 0644)
 				Expect(err).To(BeNil())
 			})
 
@@ -611,7 +619,7 @@ var _ = Describe("Compile", func() {
 
 		Context(".profile.d directory exists", func() {
 			BeforeEach(func() {
-				err = os.Mkdir(filepath.Join(buildDir, ".profile.d"), 0777)
+				err = os.Mkdir(filepath.Join(buildDir, ".profile.d"), 0755)
 				Expect(err).To(BeNil())
 			})
 
