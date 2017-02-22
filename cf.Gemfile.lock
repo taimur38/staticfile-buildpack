@@ -33,10 +33,6 @@ GEM
     httparty (0.14.0)
       multi_xml (>= 0.5.2)
     i18n (0.8.0)
-<<<<<<< 89015d008b11f45fd9b47aef9fb7d9166c9bad72
-=======
-    json (1.8.6)
->>>>>>> WIP; prepackage script
     kwalify (0.7.2)
     minitest (5.10.1)
     multi_xml (0.6.0)
