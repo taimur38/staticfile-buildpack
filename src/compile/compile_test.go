@@ -35,10 +35,10 @@ var _ = Describe("Compile", func() {
 	)
 
 	BeforeEach(func() {
-		buildDir, err = ioutil.TempDir("", "build")
+		buildDir, err = ioutil.TempDir("", "staticfile-buildpack.build.")
 		Expect(err).To(BeNil())
 
-		cacheDir, err = ioutil.TempDir("", "cache")
+		cacheDir, err = ioutil.TempDir("", "staticfile-buildpack.cache.")
 		Expect(err).To(BeNil())
 
 		buffer = new(bytes.Buffer)
@@ -706,7 +706,7 @@ var _ = Describe("Compile", func() {
 			Context("host dotfiles is set", func() {
 				BeforeEach(func() {
 					sf.HostDotFiles = true
-					appRootDir, err = ioutil.TempDir("", "app_root")
+					appRootDir, err = ioutil.TempDir("", "staticfile-buildpack.app_root.")
 					Expect(err).To(BeNil())
 				})
 

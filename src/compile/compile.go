@@ -204,7 +204,7 @@ func (sc *StaticfileCompiler) CopyFilesToPublic(appRootDir string) error {
 		return nil
 	}
 
-	tmpDir, err := ioutil.TempDir("", "XXXXX")
+	tmpDir, err := ioutil.TempDir("", "staticfile-buildpack.approot.")
 	if err != nil {
 		return err
 	}
