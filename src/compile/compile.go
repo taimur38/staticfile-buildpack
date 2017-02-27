@@ -36,6 +36,7 @@ var skipCopyFile = map[string]bool{
 	"Staticfile.auth": true,
 	"manifest.yml":    true,
 	".profile":        true,
+	".profile.d":      true,
 	"stackato.yml":    true,
 }
 
