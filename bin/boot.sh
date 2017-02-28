@@ -12,7 +12,7 @@
 # and  limitations under the License.
 # ------------------------------------------------------------------------------------------------
 
-export APP_ROOT=$HOME
+export APP_ROOT=$HOME/app
 export LD_LIBRARY_PATH=$APP_ROOT/nginx/lib:$LD_LIBRARY_PATH
 
 conf_file=$APP_ROOT/nginx/conf/nginx.conf
